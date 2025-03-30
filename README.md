@@ -1,8 +1,10 @@
 # WebResearch
 
-**TODO** an example of complex user question is needed.
+## An example of a complex user question
 
-# Steps
+I'm thinking of moving from Lviv to Kyiv — what should I know about cost of living, neighborhoods, gyms, and, most importantly, how to find an apartment if I have two cats?
+
+## Steps
 
 - User asks a question.
 - An LLM generates a list of subquestions that need to be answered to answer the main question.
