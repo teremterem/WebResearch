@@ -2,7 +2,7 @@
 
 ## An example of a complex user question
 
-I'm thinking of moving from Lviv to Kyiv — what should I know about cost of living, neighborhoods, gyms, and, most importantly, how to find an apartment if I have two cats?
+I'm thinking of moving from Lviv to Kyiv — what should I know about the cost of living, neighborhoods, gyms, and, most importantly, finding an apartment if I have two cats?
 
 ## Steps
 
