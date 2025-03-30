@@ -1,0 +1,5 @@
+black
+brightdata
+miniagents
+openai
+python-dotenv
