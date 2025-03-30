@@ -2,6 +2,7 @@ import os
 import asyncio
 
 from dotenv import load_dotenv
+from markdownify import markdownify as md
 from selenium.webdriver import Remote, ChromeOptions
 from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
 
@@ -24,7 +25,7 @@ async def main():
         # await asyncio.to_thread(driver.get_screenshot_as_file, "./page.png")
         print("Navigated! Scraping page content...")
         html = await asyncio.to_thread(lambda: driver.page_source)
-        print(html)
+        print(md(html))
 
 
 if __name__ == "__main__":
