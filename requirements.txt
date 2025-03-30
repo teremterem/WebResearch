@@ -4,3 +4,4 @@ httpx
 miniagents
 openai
 python-dotenv
+selenium
