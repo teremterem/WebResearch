@@ -1,8 +1,0 @@
-black
-brightdata
-httpx
-markdownify
-miniagents
-openai
-python-dotenv
-selenium
