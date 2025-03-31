@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 import random
 import os
+import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -108,11 +109,6 @@ async def research_agent(ctx: InteractionContext) -> None:
 
 @miniagent
 async def web_search_agent(ctx: InteractionContext, search_query: str, rationale: str) -> None:
-    # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
-    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
-    # enough for demonstration purposes)
-    await asyncio.sleep(random.random() * 10)
-
     search_results = await fetch_google_search(search_query)
 
     messages = await aprepare_dicts_for_openai(
@@ -151,11 +147,6 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
 
 @miniagent
 async def page_scraper_agent(ctx: InteractionContext, url: str, rationale: str) -> None:
-    # let's space out the scrapings so we don't overwhelm BrightData by multiple
-    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
-    # enough for demonstration purposes)
-    await asyncio.sleep(random.random() * 10)
-
     page_content = await asyncio.to_thread(scrape_web_page, url)
 
     ctx.reply(f"URL: {url}\nRATIONALE: {rationale}")
@@ -182,6 +173,11 @@ async def fetch_google_search(query: str) -> dict[str, Any]:
     """
     Fetch Google search results using Bright Data SERP API
     """
+    # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
+    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
+    # enough for demonstration purposes)
+    await asyncio.sleep(random.random() * 10)
+
     try:
         async with httpx.AsyncClient(
             proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335", verify=False, timeout=30
@@ -193,6 +189,11 @@ async def fetch_google_search(query: str) -> dict[str, Any]:
 
 
 def scrape_web_page(url: str) -> str:
+    # let's space out the scrapings so we don't overwhelm BrightData by multiple
+    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
+    # enough for demonstration purposes)
+    time.sleep(random.random() * 10)
+
     try:
         sbr_connection = ChromiumRemoteConnection(
             f"https://{BRIGHTDATA_SCRAPING_BROWSER_CREDS}@brd.superproxy.io:9515",
