@@ -17,7 +17,6 @@ from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnecti
 
 load_dotenv()
 
-# Get Bright Data API token from environment variables
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
@@ -45,11 +44,11 @@ class WebPagesToBeRead(BaseModel):
 
 
 async def main():
-    # question = input("Enter a question: ")
-    question = (
-        "I'm thinking of moving from Lviv to Kyiv — what should I know about the cost of living, neighborhoods, gyms, "
-        "and, most importantly, finding an apartment if I have two cats?"
-    )
+    question = input("Enter your question: ")
+    # question = (
+    #     "I'm thinking of moving from Lviv to Kyiv — what should I know about the cost of living, neighborhoods, gyms, "
+    #     "and, most importantly, finding an apartment if I have two cats?"
+    # )
 
     response_promises = research_agent.trigger(question)
 
