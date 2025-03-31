@@ -77,11 +77,11 @@ async def research_agent(ctx: InteractionContext) -> None:
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
 
-    web_search_results = []
+    collected_web_information = []
 
     for web_search in parsed.web_searches:
         ctx.reply(f"> {web_search.rationale}\nSEARCHING FOR: {web_search.web_search_query}")
-        web_search_results.append(
+        collected_web_information.append(
             web_search_agent.trigger(
                 ctx.message_promises,
                 search_query=web_search.web_search_query,
@@ -89,7 +89,21 @@ async def research_agent(ctx: InteractionContext) -> None:
             )
         )
 
-    ctx.reply(web_search_results)
+    ctx.reply(
+        openai_agent.trigger(
+            [
+                "USER QUESTION:",
+                ctx.message_promises,
+                "INFORMATION FOUND ON THE INTERNET:",
+                collected_web_information,
+            ],
+            system=(
+                "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
+                "Current date is " + datetime.now().strftime("%Y-%m-%d")
+            ),
+            model="gpt-4o",
+        )
+    )
 
 
 @miniagent
