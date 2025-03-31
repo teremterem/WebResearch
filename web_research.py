@@ -45,7 +45,7 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
     # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
     # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
     # enough for demonstration purposes)
-    await asyncio.sleep(random.random() * 3)
+    await asyncio.sleep(random.random() * 5)
 
     try:
         search_results = await fetch_google_search(search_query)
