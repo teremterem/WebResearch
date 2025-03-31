@@ -73,14 +73,19 @@ async def research_agent(ctx: InteractionContext) -> None:
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
 
+    web_search_results = []
+
     for web_search in parsed.web_searches:
         ctx.reply(f"> {web_search.rationale}\nSEARCHING FOR: {web_search.web_search_query}")
-        found_material = web_search_agent.trigger(
-            ctx.message_promises,
-            search_query=web_search.web_search_query,
-            rationale=web_search.rationale,
+        web_search_results.append(
+            web_search_agent.trigger(
+                ctx.message_promises,
+                search_query=web_search.web_search_query,
+                rationale=web_search.rationale,
+            )
         )
-        ctx.reply(found_material)
+
+    ctx.reply(web_search_results)
 
 
 @miniagent
@@ -88,7 +93,7 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
     # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
     # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
     # enough for demonstration purposes)
-    await asyncio.sleep(random.random() * 5)
+    await asyncio.sleep(random.random() * 10)
 
     try:
         search_results = await fetch_google_search(search_query)
@@ -115,7 +120,7 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
 
     for web_page in parsed.web_pages:
-        ctx.reply(f"    >>> {web_page.rationale}\n    READING: {web_page.url}")
+        ctx.reply(f"> {web_page.rationale}\nREADING PAGE: {web_page.url}")
 
 
 @miniagent
