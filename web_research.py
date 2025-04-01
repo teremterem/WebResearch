@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime
 import random
 import os
-import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -14,6 +13,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from selenium.webdriver import Remote, ChromeOptions
 from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
+from selenium.webdriver.remote.client_config import ClientConfig
 
 load_dotenv()
 
@@ -21,7 +21,6 @@ BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
 openai_client = AsyncOpenAI()
-
 openai_agent = OpenAIAgent.fork(mutable_state={"async_client": openai_client})
 
 
@@ -61,8 +60,7 @@ async def main():
 
 @miniagent
 async def research_agent(ctx: InteractionContext) -> None:
-    # response_promises = openai_agent.trigger(ctx.message_promises)
-    # ctx.reply(response_promises)
+    # First, analyze the user's question and break it down into search queries
     messages = await aprepare_dicts_for_openai(
         ctx.message_promises,
         system=(
@@ -79,6 +77,7 @@ async def research_agent(ctx: InteractionContext) -> None:
 
     collected_web_information = []
 
+    # For each identified search query, trigger a web search (in parallel)
     for web_search in parsed.web_searches:
         ctx.reply(f"> {web_search.rationale}\nSEARCHING FOR: {web_search.web_search_query}")
         collected_web_information.append(
@@ -89,6 +88,7 @@ async def research_agent(ctx: InteractionContext) -> None:
             )
         )
 
+    # Synthesize the final answer based on all collected information
     ctx.reply(
         openai_agent.trigger(
             [
@@ -108,8 +108,10 @@ async def research_agent(ctx: InteractionContext) -> None:
 
 @miniagent
 async def web_search_agent(ctx: InteractionContext, search_query: str, rationale: str) -> None:
+    # Execute the search query
     search_results = await fetch_google_search(search_query)
 
+    # Analyze search results to identify relevant web pages
     messages = await aprepare_dicts_for_openai(
         [
             ctx.message_promises,
@@ -129,11 +131,10 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
 
-    web_scraping_results = []
-
+    # For each identified web page, trigger scraping (in parallel)
     for web_page in parsed.web_pages:
-        ctx.reply(f"> {web_page.rationale}\nREADING PAGE: {web_page.url}")
-        web_scraping_results.append(
+        # ctx.reply(f"> {web_page.rationale}\nREADING PAGE: {web_page.url}")
+        ctx.reply(  # Return scraping results
             page_scraper_agent.trigger(
                 ctx.message_promises,
                 url=web_page.url,
@@ -141,15 +142,15 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
             )
         )
 
-    ctx.reply(web_scraping_results)
-
 
 @miniagent
 async def page_scraper_agent(ctx: InteractionContext, url: str, rationale: str) -> None:
+    # Scrape the web page
     page_content = await asyncio.to_thread(scrape_web_page, url)
 
     ctx.reply(f"URL: {url}\nRATIONALE: {rationale}")
 
+    # Extract relevant information from the page content
     ctx.reply(
         openai_agent.trigger(
             [
@@ -169,42 +170,52 @@ async def page_scraper_agent(ctx: InteractionContext, url: str, rationale: str) 
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
-    """
-    Fetch Google search results using Bright Data SERP API
-    """
-    # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
-    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
-    # enough for demonstration purposes)
-    await asyncio.sleep(random.random() * 10)
+    # # let's space out the searches so we don't overwhelm BrightData (and, consequently, Google) by multiple
+    # # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
+    # # enough for demonstration purposes)
+    # await asyncio.sleep(random.random() * 10)
 
     try:
         async with httpx.AsyncClient(
             proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335", verify=False, timeout=30
         ) as client:
             response = await client.get(f"https://www.google.com/search?q={query}&brd_json=1")
-        return response.json()
+        resp = response.json()
+        print(f"SEARCH SUCCESSFUL: {query}\n")
+        return resp
     except Exception as e:
-        return f"FAILED TO SEARCH FOR: {query}\n{e}"
+        msg = f"FAILED TO SEARCH FOR: {query}\n{e}"
+        print(msg)
+        return msg
 
 
 def scrape_web_page(url: str) -> str:
-    # let's space out the scrapings so we don't overwhelm BrightData by multiple
-    # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
-    # enough for demonstration purposes)
-    time.sleep(random.random() * 10)
+    # # let's space out the scrapings so we don't overwhelm BrightData by multiple
+    # # simultaneous requests (some smarter way of throttling could be implemented, of course, but this is good
+    # # enough for demonstration purposes)
+    # time.sleep(random.random() * 10)
 
     try:
+        remote_server_addr = "https://brd.superproxy.io:9515"
+        client_config = ClientConfig(
+            remote_server_addr=remote_server_addr,
+            username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
+            password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
+            timeout=30,
+        )
         sbr_connection = ChromiumRemoteConnection(
-            f"https://{BRIGHTDATA_SCRAPING_BROWSER_CREDS}@brd.superproxy.io:9515",
-            "goog",
-            "chrome",
+            remote_server_addr, "goog", "chrome", client_config=client_config
         )
         with Remote(sbr_connection, options=ChromeOptions()) as driver:
             driver.get(url)
             html = driver.page_source
-        return md(html)
+        resp = md(html)
+        print(f"SCRAPING SUCCESSFUL: {url}\n")
+        return resp
     except Exception as e:
-        return f"FAILED TO READ WEB PAGE: {url}\n{e}"
+        msg = f"FAILED TO SCRAPE WEB PAGE: {url}\n{e}"
+        print(msg)
+        return msg
 
 
 if __name__ == "__main__":
