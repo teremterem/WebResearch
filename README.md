@@ -1,3 +1,5 @@
+***NOTE: For a detailed walkthrough of this project, check out the [full tutorial](https://app.readytensor.ai/publications/miniagents-multi-agent-ai-with-procedural-simplicity-sZ9xgmyLOTyp).***
+
 # WebResearch
 
 A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
@@ -86,7 +88,3 @@ MiniAgents is an open-source, async-first Python framework for building multi-ag
 3. **Immutable message philosophy**: Uses immutable, Pydantic-based messages that eliminate race conditions and data corruption concerns.
 
 Learn more: [MiniAgents GitHub Repository](https://github.com/teremterem/MiniAgents)
-
-## Further Reading
-
-For a detailed walkthrough of this project, check out the [full tutorial](https://app.readytensor.ai/publications/miniagents-multi-agent-ai-with-procedural-simplicity-sZ9xgmyLOTyp).
