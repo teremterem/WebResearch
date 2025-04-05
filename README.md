@@ -41,7 +41,7 @@ MiniAgents uses the `start_soon` mode by default, allowing each agent to run in 
 ## Installation
 
 ```bash
-pip install -U miniagents openai httpx pydantic markdownify python-dotenv selenium
+pip install -U -r requirements.txt
 ```
 
 ## Configuration
