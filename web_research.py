@@ -1,7 +1,6 @@
 import asyncio
-from datetime import datetime
-import random
 import os
+from datetime import datetime
 from typing import Any
 
 from dotenv import load_dotenv
@@ -10,7 +9,7 @@ from markdownify import markdownify as md
 from miniagents import InteractionContext, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from selenium.webdriver import Remote, ChromeOptions
 from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
 from selenium.webdriver.remote.client_config import ClientConfig
@@ -21,7 +20,12 @@ BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
 openai_client = AsyncOpenAI()
-openai_agent = OpenAIAgent.fork(mutable_state={"async_client": openai_client})
+try:
+    openai_agent = OpenAIAgent.fork(non_freezable_kwargs={"async_client": openai_client})
+except ValidationError as e:
+    raise ValueError(
+        "You need MiniAgents v0.0.28 or run this example. Please update MiniAgents with `pip install -U miniagents`"
+    ) from e
 
 
 class WebSearch(BaseModel):
@@ -203,9 +207,7 @@ def scrape_web_page(url: str) -> str:
             password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
             timeout=30,
         )
-        sbr_connection = ChromiumRemoteConnection(
-            remote_server_addr, "goog", "chrome", client_config=client_config
-        )
+        sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
         with Remote(sbr_connection, options=ChromeOptions()) as driver:
             driver.get(url)
             html = driver.page_source
