@@ -24,7 +24,8 @@ try:
     openai_agent = OpenAIAgent.fork(non_freezable_kwargs={"async_client": openai_client})
 except ValidationError as e:
     raise ValueError(
-        "You need MiniAgents v0.0.28 or run this example. Please update MiniAgents with `pip install -U miniagents`"
+        "You need MiniAgents v0.0.28 or later to run this example.\n\n"
+        "Please update MiniAgents with `pip install -U miniagents`\n"
     ) from e
 
 
