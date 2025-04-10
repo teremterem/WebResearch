@@ -81,7 +81,6 @@ async def research_agent(ctx: InteractionContext) -> None:
         response_format=WebSearchesToBeDone,
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
-    parsed.web_searches = parsed.web_searches[:3]  # TODO: remove this
 
     final_answer_call = openai_agent.initiate_call(
         system=(
@@ -106,11 +105,10 @@ async def research_agent(ctx: InteractionContext) -> None:
             ctx.message_promises,
             search_query=web_search.web_search_query,
             rationale=web_search.rationale,
-            # TODO when errors_to_messages is True, should those errors be suppressed in the log ?
-            errors_to_messages=True,  # don't raise an error and fail everything if only some searches fail
         )
         # Keep the user informed about the progress
-        ctx.reply_urgently(web_search_responses)  # whichever messages are available first, should be delivered first
+        # (also, whichever messages are available first, should be delivered first)
+        ctx.reply_out_of_order(web_search_responses)
         final_answer_call.send_message(web_search_responses)
 
         ctx.make_sure_to_wait(web_search_responses)
@@ -149,18 +147,20 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
         response_format=WebPagesToBeRead,
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
-    parsed.web_pages = parsed.web_pages[:3]  # TODO: remove this
+
+    # TODO filter out pages that were already read
+
+    parsed.web_pages = parsed.web_pages[:3]  # TODO move to constant
 
     ctx.reply(f"READING {len(parsed.web_pages)} WEB PAGES")
 
     # For each identified web page, trigger scraping (in parallel)
     for web_page in parsed.web_pages:
-        ctx.reply_urgently(  # Return scraping results
+        ctx.reply_out_of_order(  # Return scraping results
             page_scraper_agent.trigger(
                 ctx.message_promises,
                 url=web_page.url,
                 rationale=web_page.rationale,
-                errors_to_messages=True,  # don't raise an error and fail everything if only some scrapings fail
             )
         )
 
@@ -218,4 +218,8 @@ def scrape_web_page(url: str) -> str:
 
 
 if __name__ == "__main__":
-    MiniAgents(llm_logger_agent=True).run(main())
+    MiniAgents(
+        llm_logger_agent=True,
+        # let's make the system as robust as possible by not failing on errors
+        errors_as_messages=True,
+    ).run(main())
