@@ -1,10 +1,7 @@
 black
 httpx
 markdownify
-
-# miniagents
--e ../MiniAgents
-
+miniagents
 openai
 pydantic
 python-dotenv
