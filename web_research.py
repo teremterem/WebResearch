@@ -19,6 +19,8 @@ load_dotenv()
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
+MAX_WEB_PAGES_PER_SEARCH = 3
+
 openai_client = AsyncOpenAI()
 try:
     openai_agent = OpenAIAgent.fork(non_freezable_kwargs={"async_client": openai_client})
@@ -150,7 +152,7 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
 
     # TODO filter out pages that were already read
 
-    parsed.web_pages = parsed.web_pages[:3]  # TODO move to constant
+    parsed.web_pages = parsed.web_pages[:MAX_WEB_PAGES_PER_SEARCH]
 
     ctx.reply(f"READING {len(parsed.web_pages)} WEB PAGES")
 
