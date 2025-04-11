@@ -16,6 +16,8 @@ from selenium.webdriver.remote.client_config import ClientConfig
 
 load_dotenv()
 
+MODEL = "gpt-4o-mini"  # "gpt-4o"
+
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
@@ -56,10 +58,6 @@ class WebPagesToBeRead(BaseModel):
 
 async def main():
     question = input("\nEnter your question: ")
-    # question = (
-    #     "I'm thinking of moving from Lviv to Kyiv — what should I know about the cost of living, neighborhoods, "
-    #     "gyms, and, most importantly, finding an apartment if I have two cats?"
-    # )
 
     response_promises = research_agent.trigger(question)
 
@@ -85,7 +83,7 @@ async def research_agent(ctx: InteractionContext) -> None:
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model="gpt-4o",
+        model=MODEL,
         messages=messages,
         response_format=WebSearchesToBeDone,
     )
@@ -96,7 +94,7 @@ async def research_agent(ctx: InteractionContext) -> None:
             "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
             "Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
-        model="gpt-4o",
+        model=MODEL,
     )
     final_answer_call.send_message(
         [
@@ -170,7 +168,7 @@ async def web_search_agent(
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model="gpt-4o",
+        model=MODEL,
         messages=messages,
         response_format=WebPagesToBeRead,
     )
@@ -224,7 +222,7 @@ async def page_scraper_agent(
             "by other agents to answer the user's original question later. "
             "Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
-        model="gpt-4o",
+        model=MODEL,
         stream=False,
         # Let's break the flow of this agent if LLM completion goes wrong (remember, we initially set
         # `errors_as_messages` as True globally for all agents)
