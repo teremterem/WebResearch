@@ -19,7 +19,12 @@ load_dotenv()
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
+BRIGHT_DATA_TIMEOUT = 60
 MAX_WEB_PAGES_PER_SEARCH = 3
+
+# Allow only a limited number of concurrent web searches and web page scrapings
+searching_semaphore = asyncio.Semaphore(2)
+scraping_semaphore = asyncio.Semaphore(2)
 
 openai_client = AsyncOpenAI()
 try:
@@ -201,8 +206,8 @@ async def page_scraper_agent(
 ) -> None:
     ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
 
-    # Scrape the web page (Selenium doesn't support asyncio, so we need to run it in a thread)
-    page_content = await asyncio.to_thread(scrape_web_page, url)
+    # Scrape the web page
+    page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
     # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
@@ -244,26 +249,34 @@ async def page_scraper_agent(
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(
-        proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335", verify=False, timeout=30
-    ) as client:
-        response = await client.get(f"https://www.google.com/search?q={query}&brd_json=1")
+    async with searching_semaphore:
+        async with httpx.AsyncClient(
+            proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335",
+            verify=False,
+            timeout=BRIGHT_DATA_TIMEOUT,
+        ) as client:
+            response = await client.get(f"https://www.google.com/search?q={query}&brd_json=1")
+
     return response.json()
 
 
-def scrape_web_page(url: str) -> str:
-    remote_server_addr = "https://brd.superproxy.io:9515"
-    client_config = ClientConfig(
-        remote_server_addr=remote_server_addr,
-        username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
-        password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
-        timeout=30,
-    )
-    sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
-    with Remote(sbr_connection, options=ChromeOptions()) as driver:
-        driver.get(url)
-        html = driver.page_source
-    return md(html)
+async def scrape_web_page(url: str) -> str:
+    def _scrape_web_page_sync(url: str) -> str:
+        remote_server_addr = "https://brd.superproxy.io:9515"
+        client_config = ClientConfig(
+            remote_server_addr=remote_server_addr,
+            username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
+            password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
+            timeout=BRIGHT_DATA_TIMEOUT,
+        )
+        sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
+        with Remote(sbr_connection, options=ChromeOptions()) as driver:
+            driver.get(url)
+            return driver.page_source
+
+    async with scraping_semaphore:
+        # Selenium doesn't support asyncio, so we need to run it in a thread
+        return md(await asyncio.to_thread(_scrape_web_page_sync, url))
 
 
 if __name__ == "__main__":
