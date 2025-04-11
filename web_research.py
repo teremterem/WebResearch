@@ -19,12 +19,12 @@ load_dotenv()
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
-BRIGHT_DATA_TIMEOUT = 60
+BRIGHT_DATA_TIMEOUT = 30
 MAX_WEB_PAGES_PER_SEARCH = 3
 
 # Allow only a limited number of concurrent web searches and web page scrapings
-searching_semaphore = asyncio.Semaphore(2)
-scraping_semaphore = asyncio.Semaphore(2)
+searching_semaphore = asyncio.Semaphore(3)
+scraping_semaphore = asyncio.Semaphore(3)
 
 openai_client = AsyncOpenAI()
 try:
