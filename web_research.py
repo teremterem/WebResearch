@@ -60,6 +60,8 @@ async def main():
 
     print()
     async for message_promise in response_promises:
+        if getattr(message_promise.preliminary_metadata, "not_for_user", False):
+            continue
         async for token in message_promise:
             print(token, end="", flush=True)
         print("\n")
@@ -128,7 +130,7 @@ async def research_agent(ctx: InteractionContext) -> None:
         final_answer_call.send_message(web_search_responses)
 
         ctx.make_sure_to_wait(web_search_responses)
-    await ctx.await_now()
+    await ctx.await_now(suppress_deadlock_warning=True)
     ctx.reply("FINAL ANSWER:")
 
     ctx.reply(final_answer_call.reply_sequence())
@@ -199,12 +201,12 @@ async def page_scraper_agent(
 ) -> None:
     ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
 
-    # Scrape the web page
+    # Scrape the web page (Selenium doesn't support asyncio, so we need to run it in a thread)
     page_content = await asyncio.to_thread(scrape_web_page, url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting for the final summary from the LLM because we want to make everything went smoothly before
-    # we mark the url as already scraped and report success.
+    # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
+    # before we mark the url as already scraped and report success.
     page_summary_message = await openai_agent.trigger(
         [
             ctx.message_promises,
@@ -222,9 +224,21 @@ async def page_scraper_agent(
         # Let's break the flow of this agent if LLM completion goes wrong (remember, we initially set
         # `errors_as_messages` as True globally for all agents)
         errors_as_messages=False,
+        response_metadata={
+            # We will be feeding the response back to the LLM, let's make it look like this message came from the user
+            "role": "user",
+            # The outmost message loop will encounter this message along with other messages, let's prevent it from
+            # being displayed to the user.
+            # NOTE: "not_for_user" is an attribute name that we just made up, we could have used any other name, as
+            # long as we read it back in the outmost message loop.
+            "not_for_user": True,
+        },
     )
 
     already_scraped_urls.add(url)
+
+    # There is no await between the following two replies (no task switching happens), hence they will alway go one
+    # after another and no "out of order" message from a parallel agent will be mixed in.
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
     ctx.reply(page_summary_message)
 
