@@ -114,10 +114,9 @@ async def research_agent(ctx: InteractionContext) -> None:
         final_answer_call.send_message(web_search_responses)
 
         ctx.make_sure_to_wait(web_search_responses)
-
     await ctx.await_now()
-
     ctx.reply("FINAL ANSWER:")
+
     ctx.reply(final_answer_call.reply_sequence())
 
 
