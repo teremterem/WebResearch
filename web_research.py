@@ -6,7 +6,7 @@ from typing import Any
 from dotenv import load_dotenv
 import httpx
 from markdownify import markdownify as md
-from miniagents import InteractionContext, MiniAgents, miniagent
+from miniagents import InteractionContext, MiniAgent, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
@@ -101,9 +101,23 @@ async def research_agent(ctx: InteractionContext) -> None:
 
     ctx.reply(f"RUNNING {len(parsed.web_searches)} WEB SEARCHES")
 
+    already_scraped_urls = set[str]()
+    # Let's fork the `page_scraper_agent` and `web_search_agent` to introduce mutable state - we want them to remember
+    # across multiple calls which urls were already scraped
+    _web_search_agent = web_search_agent.fork(
+        non_freezable_kwargs={
+            "_page_scraper_agent": page_scraper_agent.fork(
+                non_freezable_kwargs={
+                    "already_scraped_urls": already_scraped_urls,
+                },
+            ),
+            "already_scraped_urls": already_scraped_urls,
+        },
+    )
+
     # For each identified search query, trigger a web search (in parallel)
     for web_search in parsed.web_searches:
-        web_search_responses = web_search_agent.trigger(
+        web_search_responses = _web_search_agent.trigger(
             ctx.message_promises,
             search_query=web_search.web_search_query,
             rationale=web_search.rationale,
@@ -121,7 +135,13 @@ async def research_agent(ctx: InteractionContext) -> None:
 
 
 @miniagent
-async def web_search_agent(ctx: InteractionContext, search_query: str, rationale: str) -> None:
+async def web_search_agent(
+    ctx: InteractionContext,
+    search_query: str,
+    rationale: str,
+    already_scraped_urls: set[str],
+    _page_scraper_agent: MiniAgent,
+) -> None:
     ctx.reply(f"> {rationale}\nSEARCHING FOR: {search_query}")
 
     # Execute the search query
@@ -149,16 +169,20 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
 
-    # TODO filter out pages that were already read
+    web_pages_to_scrape: list[WebPage] = []
+    for web_page in parsed.web_pages:
+        if web_page.url not in already_scraped_urls:
+            web_pages_to_scrape.append(web_page)
+        if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
+            break
 
-    parsed.web_pages = parsed.web_pages[:MAX_WEB_PAGES_PER_SEARCH]
-
-    ctx.reply(f"READING {len(parsed.web_pages)} WEB PAGES")
+    ctx.reply(f"READING {len(web_pages_to_scrape)} WEB PAGES")
 
     # For each identified web page, trigger scraping (in parallel)
-    for web_page in parsed.web_pages:
-        ctx.reply_out_of_order(  # Return scraping results
-            page_scraper_agent.trigger(
+    for web_page in web_pages_to_scrape:
+        # Return scraping results in order of their availability rather than sequentially
+        ctx.reply_out_of_order(
+            _page_scraper_agent.trigger(
                 ctx.message_promises,
                 url=web_page.url,
                 rationale=web_page.rationale,
@@ -167,32 +191,42 @@ async def web_search_agent(ctx: InteractionContext, search_query: str, rationale
 
 
 @miniagent
-async def page_scraper_agent(ctx: InteractionContext, url: str, rationale: str) -> None:
+async def page_scraper_agent(
+    ctx: InteractionContext,
+    url: str,
+    rationale: str,
+    already_scraped_urls: set[str],
+) -> None:
     ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
 
     # Scrape the web page
     page_content = await asyncio.to_thread(scrape_web_page, url)
 
-    ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
-
-    # Extract relevant information from the page content
-    ctx.reply(
-        openai_agent.trigger(
-            [
-                ctx.message_promises,
-                f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
-            ],
-            system=(
-                "This is a user question that another AI agent (not you) will have to answer. Your job, however, is "
-                "to extract from WEB PAGE CONTENT facts that are relevant to the users original "
-                "question. The other AI agent will use the information you extract along with information extracted "
-                "by other agents to answer the user's original question later. "
-                "Current date is " + datetime.now().strftime("%Y-%m-%d")
-            ),
-            model="gpt-4o",
-            stream=False,
-        )
+    # Extract relevant information from the page content.
+    # NOTE: We are awaiting for the final summary from the LLM because we want to make everything went smoothly before
+    # we mark the url as already scraped and report success.
+    page_summary_message = await openai_agent.trigger(
+        [
+            ctx.message_promises,
+            f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
+        ],
+        system=(
+            "This is a user question that another AI agent (not you) will have to answer. Your job, however, is "
+            "to extract from WEB PAGE CONTENT facts that are relevant to the users original "
+            "question. The other AI agent will use the information you extract along with information extracted "
+            "by other agents to answer the user's original question later. "
+            "Current date is " + datetime.now().strftime("%Y-%m-%d")
+        ),
+        model="gpt-4o",
+        stream=False,
+        # Let's break the flow of this agent if LLM completion goes wrong (remember, we initially set
+        # `errors_as_messages` as True globally for all agents)
+        errors_as_messages=False,
     )
+
+    already_scraped_urls.add(url)
+    ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
+    ctx.reply(page_summary_message)
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
