@@ -1,6 +1,8 @@
 import asyncio
 import os
+import threading
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import miniagents
@@ -17,9 +19,10 @@ BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CRED
 
 BRIGHT_DATA_TIMEOUT = 30
 
-# Allow only a limited number of concurrent web searches and web page scrapings
+# Allow only a limited number of concurrent web searches
 searching_semaphore = asyncio.Semaphore(3)
-scraping_semaphore = asyncio.Semaphore(3)
+# Allow only a limited number of concurrent web page scrapings
+scraping_thread_pool = ThreadPoolExecutor(max_workers=3)
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
@@ -36,22 +39,26 @@ async def fetch_google_search(query: str) -> dict[str, Any]:
 
 async def scrape_web_page(url: str) -> str:
     def _scrape_web_page_sync(url: str) -> str:
-        remote_server_addr = "https://brd.superproxy.io:9515"
         client_config = ClientConfig(
-            remote_server_addr=remote_server_addr,
+            remote_server_addr="https://brd.superproxy.io:9515",
             username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
             password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
             timeout=BRIGHT_DATA_TIMEOUT,
         )
-        sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
+        sbr_connection = ChromiumRemoteConnection(
+            client_config.remote_server_addr,
+            "goog",
+            "chrome",
+            client_config=client_config,
+        )
         with Remote(sbr_connection, options=ChromeOptions()) as driver:
             driver.get(url)
             return driver.page_source
 
-    # TODO instead of using a semaphore create a pool of web drivers to reuse already instantiated Selenium browsers
-    async with scraping_semaphore:
-        # Selenium doesn't support asyncio, so we need to run it in a thread
-        return md(await asyncio.to_thread(_scrape_web_page_sync, url))
+    loop = asyncio.get_running_loop()
+    # Selenium does not support asyncio, so we need to run it in a thread pool
+    page_source = await loop.run_in_executor(scraping_thread_pool, _scrape_web_page_sync, url)
+    return md(page_source)
 
 
 def check_miniagents_version():
