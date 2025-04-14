@@ -1,33 +1,21 @@
-import asyncio
-import os
-from datetime import datetime
-from typing import Any, Union
+from utils import check_miniagents_version, fetch_google_search, scrape_web_page
 
-import httpx
-import miniagents
+check_miniagents_version()
+
+from datetime import datetime
+from typing import Union
+
 from dotenv import load_dotenv
-from markdownify import markdownify as md
 from miniagents import InteractionContext, Message, MiniAgent, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel
-from selenium.webdriver import Remote, ChromeOptions
-from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
-from selenium.webdriver.remote.client_config import ClientConfig
 
 load_dotenv()
 
 MODEL = "gpt-4o-mini"  # "gpt-4o"
-
-BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
-BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
-
-BRIGHT_DATA_TIMEOUT = 30
+SMARTER_MODEL = "o3-mini"
 MAX_WEB_PAGES_PER_SEARCH = 3
-
-# Allow only a limited number of concurrent web searches and web page scrapings
-searching_semaphore = asyncio.Semaphore(3)
-scraping_semaphore = asyncio.Semaphore(3)
 
 openai_client = AsyncOpenAI()
 
@@ -78,7 +66,7 @@ async def research_agent(ctx: InteractionContext) -> None:
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model=MODEL,
+        model=SMARTER_MODEL,
         messages=messages,
         response_format=WebSearchesToBeDone,
     )
@@ -147,7 +135,7 @@ async def web_search_agent(
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model=MODEL,
+        model=SMARTER_MODEL,
         messages=messages,
         response_format=WebPagesToBeRead,
     )
@@ -184,7 +172,12 @@ async def page_scraper_agent(
     ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
 
     # Scrape the web page
-    page_content = await scrape_web_page(url)
+    try:
+        page_content = await scrape_web_page(url)
+    except Exception as e:
+        # let's give it a second chance
+        ctx.reply(f"RETRYING: {url}")
+        page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
     # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
@@ -245,61 +238,10 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
     )
 
 
-async def fetch_google_search(query: str) -> dict[str, Any]:
-    async with searching_semaphore:
-        async with httpx.AsyncClient(
-            proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335",
-            verify=False,
-            timeout=BRIGHT_DATA_TIMEOUT,
-        ) as client:
-            response = await client.get(f"https://www.google.com/search?q={query}&brd_json=1")
-
-    return response.json()
-
-
-async def scrape_web_page(url: str) -> str:
-    def _scrape_web_page_sync(url: str) -> str:
-        remote_server_addr = "https://brd.superproxy.io:9515"
-        client_config = ClientConfig(
-            remote_server_addr=remote_server_addr,
-            username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
-            password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
-            timeout=BRIGHT_DATA_TIMEOUT,
-        )
-        sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
-        with Remote(sbr_connection, options=ChromeOptions()) as driver:
-            driver.get(url)
-            return driver.page_source
-
-    async with scraping_semaphore:
-        # Selenium doesn't support asyncio, so we need to run it in a thread
-        return md(await asyncio.to_thread(_scrape_web_page_sync, url))
-
-
-def check_miniagents_version():
-    try:
-        miniagents_version: tuple[int, int, int] = tuple(map(int, miniagents.__version__.split(".")))
-        valid_miniagents_version = miniagents_version >= (0, 0, 28)
-    except ValueError:
-        # if any of the version components are not integers, we will consider it as a later version
-        # (before 0.0.28 there were only numeric versions)
-        valid_miniagents_version = True
-    except AttributeError:
-        # the absence of the __version__ attribute means that it is definitely an old version
-        valid_miniagents_version = False
-
-    if not valid_miniagents_version:
-        raise ValueError(
-            "You need MiniAgents v0.0.28 or later to run this example.\n\n"
-            "Please update MiniAgents with `pip install -U miniagents`\n"
-        )
-
-
 if __name__ == "__main__":
-    check_miniagents_version()
-
     MiniAgents(
         llm_logger_agent=True,
         # let's make the system as robust as possible by not failing on errors
         errors_as_messages=True,
+        # error_tracebacks_in_messages=True,
     ).run(main())
