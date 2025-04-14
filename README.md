@@ -46,7 +46,9 @@ pip install -U -r requirements.txt
 
 ## Configuration
 
-Create a `.env` file with your API credentials:
+For the LLM we use [OpenAI](https://platform.openai.com/api-keys), for google searches we use [Bright Data SERP API](https://brightdata.com/products/serp-api) and for scraping we use [Bright Data Scraping Browser](https://brightdata.com/products/scraping-browser). All are pay as you go services.
+
+The websites referenced above will walk you through the process of setting respective products up and getting your API keys. After that you are ready to create a `.env` file with your API credentials:
 
 ```
 OPENAI_API_KEY=your_openai_api_key
@@ -54,7 +56,7 @@ BRIGHTDATA_SERP_API_CREDS=username:password
 BRIGHTDATA_SCRAPING_BROWSER_CREDS=username:password
 ```
 
-Note: The credentials are specifically for BrightData's SERP API and Scraping Browser products, not for your whole BrightData account.
+***NOTE: The credentials are specifically for Bright Data's SERP API and Scraping Browser products, not for your whole Bright Data account.***
 
 ## Usage
 
