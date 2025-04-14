@@ -74,17 +74,12 @@ async def research_agent(ctx: InteractionContext) -> None:
 
     ctx.reply(f"RUNNING {len(parsed.web_searches)} WEB SEARCHES")
 
-    already_scraped_urls = set[str]()
-    # Let's fork the `page_scraper_agent` and `web_search_agent` to introduce mutable state - we want them to remember
-    # across multiple calls which urls were already scraped
+    already_picked_urls = set[str]()
+    # Let's fork the `web_search_agent` to introduce mutable state - we want it to remember across multiple calls
+    # which urls were already picked for scraping
     _web_search_agent = web_search_agent.fork(
         non_freezable_kwargs={
-            "_page_scraper_agent": page_scraper_agent.fork(
-                non_freezable_kwargs={
-                    "already_scraped_urls": already_scraped_urls,
-                },
-            ),
-            "already_scraped_urls": already_scraped_urls,
+            "already_picked_urls": already_picked_urls,
         },
     )
 
@@ -111,10 +106,9 @@ async def web_search_agent(
     ctx: InteractionContext,
     search_query: str,
     rationale: str,
-    already_scraped_urls: set[str],
-    _page_scraper_agent: MiniAgent,
+    already_picked_urls: set[str],
 ) -> None:
-    ctx.reply(f"> {rationale}\nSEARCHING FOR: {search_query}")
+    ctx.reply(f"> {rationale}\n\nSEARCHING FOR: {search_query}")
 
     # Execute the search query
     search_results = await fetch_google_search(search_query)
@@ -143,8 +137,9 @@ async def web_search_agent(
 
     web_pages_to_scrape: list[WebPage] = []
     for web_page in parsed.web_pages:
-        if web_page.url not in already_scraped_urls:
+        if web_page.url not in already_picked_urls:
             web_pages_to_scrape.append(web_page)
+            already_picked_urls.add(web_page.url)
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
 
@@ -154,7 +149,7 @@ async def web_search_agent(
     for web_page in web_pages_to_scrape:
         # Return scraping results in order of their availability rather than sequentially
         ctx.reply_out_of_order(
-            _page_scraper_agent.trigger(
+            page_scraper_agent.trigger(
                 ctx.message_promises,
                 url=web_page.url,
                 rationale=web_page.rationale,
@@ -167,22 +162,21 @@ async def page_scraper_agent(
     ctx: InteractionContext,
     url: str,
     rationale: str,
-    already_scraped_urls: set[str],
 ) -> None:
-    ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
+    ctx.reply(f"READING PAGE: {url}\n> {rationale}")
 
     # Scrape the web page
     try:
         page_content = await scrape_web_page(url)
-    except Exception as e:
+    except Exception:
         # let's give it a second chance
         ctx.reply(f"RETRYING: {url}")
         page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
-    # before we mark the url as already scraped and report success.
-    page_summary_message = await OpenAIAgent.trigger(
+    # NOTE: We are awaiting here instead of just passing a promise forward because we want to make sure that the final
+    # summary was generated without any errors before we report success.
+    page_summary = await OpenAIAgent.trigger(
         [
             ctx.message_promises,
             f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
@@ -208,12 +202,10 @@ async def page_scraper_agent(
         },
     )
 
-    already_scraped_urls.add(url)
-
     # There is no await between the following two replies (no task switching happens), hence they will always go one
     # after another and no "out of order" message from a parallel agent will be mixed in.
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
-    ctx.reply(page_summary_message)
+    ctx.reply(page_summary)
 
 
 @miniagent
