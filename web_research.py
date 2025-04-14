@@ -143,8 +143,6 @@ async def web_search_agent(
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
 
-    ctx.reply(f"READING {len(web_pages_to_scrape)} WEB PAGES")
-
     # For each identified web page, trigger scraping (in parallel)
     for web_page in web_pages_to_scrape:
         # Return scraping results in order of their availability rather than sequentially
