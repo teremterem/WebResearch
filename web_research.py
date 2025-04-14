@@ -207,9 +207,6 @@ async def page_scraper_agent(
         # `errors_as_messages` as True globally for all agents)
         errors_as_messages=False,
         response_metadata={
-            # TODO I don't think this works
-            # We will be feeding the response back to the LLM, let's make it look like this message came from the user
-            "role": "user",
             # The outmost message loop will encounter this message along with other messages, let's prevent it from
             # being displayed to the user.
             # NOTE: "not_for_user" is an attribute name that we just made up, we could have used any other name, as
