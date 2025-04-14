@@ -1,15 +1,16 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
-from dotenv import load_dotenv
 import httpx
+import miniagents
+from dotenv import load_dotenv
 from markdownify import markdownify as md
-from miniagents import InteractionContext, MiniAgent, MiniAgents, miniagent
+from miniagents import InteractionContext, Message, MiniAgent, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from selenium.webdriver import Remote, ChromeOptions
 from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
 from selenium.webdriver.remote.client_config import ClientConfig
@@ -29,13 +30,6 @@ searching_semaphore = asyncio.Semaphore(3)
 scraping_semaphore = asyncio.Semaphore(3)
 
 openai_client = AsyncOpenAI()
-try:
-    openai_agent = OpenAIAgent.fork(non_freezable_kwargs={"async_client": openai_client})
-except ValidationError as e:
-    raise ValueError(
-        "You need MiniAgents v0.0.28 or later to run this example.\n\n"
-        "Please update MiniAgents with `pip install -U miniagents`\n"
-    ) from e
 
 
 class WebSearch(BaseModel):
@@ -61,6 +55,7 @@ async def main():
 
     response_promises = research_agent.trigger(question)
 
+    # TODO the prints below are the only prints in the script
     print()
     async for message_promise in response_promises:
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
@@ -89,21 +84,6 @@ async def research_agent(ctx: InteractionContext) -> None:
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
 
-    final_answer_call = openai_agent.initiate_call(
-        system=(
-            "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
-            "Current date is " + datetime.now().strftime("%Y-%m-%d")
-        ),
-        model=MODEL,
-    )
-    final_answer_call.send_message(
-        [
-            "USER QUESTION:",
-            ctx.message_promises,
-            "INFORMATION FOUND ON THE INTERNET:",
-        ],
-    )
-
     ctx.reply(f"RUNNING {len(parsed.web_searches)} WEB SEARCHES")
 
     already_scraped_urls = set[str]()
@@ -120,6 +100,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         },
     )
 
+    final_answer_call = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
+
     # For each identified search query, trigger a web search (in parallel)
     for web_search in parsed.web_searches:
         web_search_responses = _web_search_agent.trigger(
@@ -130,11 +112,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         # Keep the user informed about the progress
         # (also, whichever messages are available first, should be delivered first)
         ctx.reply_out_of_order(web_search_responses)
-        final_answer_call.send_message(web_search_responses)
 
-        ctx.make_sure_to_wait(web_search_responses)
-    await ctx.await_now(suppress_deadlock_warning=True)
-    ctx.reply("FINAL ANSWER:")
+        final_answer_call.send_message(web_search_responses)
 
     ctx.reply(final_answer_call.reply_sequence())
 
@@ -210,7 +189,7 @@ async def page_scraper_agent(
     # Extract relevant information from the page content.
     # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
     # before we mark the url as already scraped and report success.
-    page_summary_message = await openai_agent.trigger(
+    page_summary_message = await OpenAIAgent.trigger(
         [
             ctx.message_promises,
             f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
@@ -228,6 +207,7 @@ async def page_scraper_agent(
         # `errors_as_messages` as True globally for all agents)
         errors_as_messages=False,
         response_metadata={
+            # TODO I don't think this works
             # We will be feeding the response back to the LLM, let's make it look like this message came from the user
             "role": "user",
             # The outmost message loop will encounter this message along with other messages, let's prevent it from
@@ -240,10 +220,32 @@ async def page_scraper_agent(
 
     already_scraped_urls.add(url)
 
-    # There is no await between the following two replies (no task switching happens), hence they will alway go one
+    # There is no await between the following two replies (no task switching happens), hence they will always go one
     # after another and no "out of order" message from a parallel agent will be mixed in.
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
     ctx.reply(page_summary_message)
+
+
+@miniagent
+async def final_answer_agent(ctx: InteractionContext, user_question: Union[Message, tuple[Message, ...]]) -> None:
+    await ctx.message_promises  # TODO await because we don't want premature "FINAL ANSWER:" message
+    ctx.reply("FINAL ANSWER:")
+
+    ctx.reply(
+        OpenAIAgent.trigger(
+            [
+                "USER QUESTION:",
+                user_question,
+                "INFORMATION FOUND ON THE INTERNET:",
+                ctx.message_promises,
+            ],
+            system=(
+                "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
+                "Current date is " + datetime.now().strftime("%Y-%m-%d")
+            ),
+            model=MODEL,
+        )
+    )
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
@@ -277,7 +279,28 @@ async def scrape_web_page(url: str) -> str:
         return md(await asyncio.to_thread(_scrape_web_page_sync, url))
 
 
+def check_miniagents_version():
+    try:
+        miniagents_version: tuple[int, int, int] = tuple(map(int, miniagents.__version__.split(".")))
+        valid_miniagents_version = miniagents_version >= (0, 0, 28)
+    except ValueError:
+        # if any of the version components are not integers, we will consider it as a later version
+        # (before 0.0.28 there were only numeric versions)
+        valid_miniagents_version = True
+    except AttributeError:
+        # the absence of the __version__ attribute means that it is definitely an old version
+        valid_miniagents_version = False
+
+    if not valid_miniagents_version:
+        raise ValueError(
+            "You need MiniAgents v0.0.28 or later to run this example.\n\n"
+            "Please update MiniAgents with `pip install -U miniagents`\n"
+        )
+
+
 if __name__ == "__main__":
+    check_miniagents_version()
+
     MiniAgents(
         llm_logger_agent=True,
         # let's make the system as robust as possible by not failing on errors
