@@ -108,7 +108,7 @@ async def web_search_agent(
     rationale: str,
     already_picked_urls: set[str],
 ) -> None:
-    ctx.reply(f"> {rationale}\n\nSEARCHING FOR: {search_query}")
+    ctx.reply(f'SEARCHING FOR "{search_query}"\n{rationale}')
 
     # Execute the search query
     search_results = await fetch_google_search(search_query)
@@ -163,7 +163,7 @@ async def page_scraper_agent(
     url: str,
     rationale: str,
 ) -> None:
-    ctx.reply(f"READING PAGE: {url}\n> {rationale}")
+    ctx.reply(f"READING PAGE: {url}\n{rationale}")
 
     # Scrape the web page
     try:
