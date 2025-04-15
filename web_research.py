@@ -249,13 +249,26 @@ async def page_scraper_agent(
 
 @miniagent
 async def final_answer_agent(ctx: InteractionContext, user_question: Union[Message, tuple[Message, ...]]) -> None:
-    await ctx.message_promises  # TODO await because we don't want premature "FINAL ANSWER:" message
+    # Here we await for the incoming `MessageSequencePromise` to materialize into a tuple of concrete `Message` objects
+    # (which would be the result of this `await` if we assigned it to a variable) - if you remember, all the results of
+    # the web searching and scraping are sent as input to the `final_answer_agent` (see the `research_agent` above).
+    await ctx.message_promises
+    # The only reason we do this `await` here is because we do not want the "=== ANSWER: ===" message below (which is
+    # available immediately, because it is a concrete string) to be sent to the user earlier than all the web searching
+    # and scraping is done and all the progress reported accordingly.
+    #
+    # As you might remember, the web searching and scraping progress reports were being returned to the user as "out of
+    # order" messages. Such messages are allowed to be delivered both, earlier as well as later than "ordered" messages
+    # (or other "out of order" messages) in the agent response sequence, depending on the timing of their availability.
     ctx.reply(
         "==========\n"
         "ANSWER:\n"
         "=========="
     )
 
+    # Just to be clear. The answer itself that OpenAI generates (below) does not require you to `await` for incoming
+    # messages explicitly (only the "=== ANSWER: ===" string did). Since the answer generation relies on those messages
+    # as part of the prompt, the answer generation would only have started after everything else was done anyway.
     ctx.reply(
         OpenAIAgent.trigger(
             [
@@ -275,8 +288,15 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
 
 if __name__ == "__main__":
     MiniAgents(
+        # Make OpenAIAgent (as well as any other LLM miniagent) to log LLM requests and responses as markdown files in
+        # the `llm_logs` directory under the current working directory (helps understand what happens under the hood).
         llm_logger_agent=True,
-        # let's make the system as robust as possible by not failing on errors
+        # Let's make the system as robust as possible by not failing the agent flow upon errors (circle those errors as
+        # part of the message sequences instead, the LLM will know to ignore them)
         errors_as_messages=True,
+
+        # # When we set `errors_as_messages` to True, the tracebacks are not included into the message content by
+        # # default, only the class names and error message strings are. If you need to see tracebacks to troubleshoot
+        # # errors, uncomment the line below.
         # error_tracebacks_in_messages=True,
     ).run(main())
