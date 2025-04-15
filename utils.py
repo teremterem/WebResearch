@@ -17,7 +17,7 @@ load_dotenv()
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
-BRIGHT_DATA_TIMEOUT = 30
+BRIGHT_DATA_TIMEOUT = 20
 
 # Allow only a limited number of concurrent web searches
 searching_semaphore = asyncio.Semaphore(5)

@@ -250,7 +250,11 @@ async def page_scraper_agent(
 @miniagent
 async def final_answer_agent(ctx: InteractionContext, user_question: Union[Message, tuple[Message, ...]]) -> None:
     await ctx.message_promises  # TODO await because we don't want premature "FINAL ANSWER:" message
-    ctx.reply("FINAL ANSWER:")
+    ctx.reply(
+        "==========\n"
+        "ANSWER:\n"
+        "=========="
+    )
 
     ctx.reply(
         OpenAIAgent.trigger(
