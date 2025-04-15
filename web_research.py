@@ -59,8 +59,8 @@ async def main():
             print(token, end="", flush=True)
         print("\n")
 
-    # NOTE #1: The `print` statements above are the only `print` statements in the whole application (except for just one
-    # `print` statement in `utils.py` which reports if the version of MiniAgents is too old for this example).
+    # NOTE #1: The `print` statements above are the only `print` statements in the whole application (except for just
+    # one `print` statement in `utils.py` which reports if the version of MiniAgents is too old for this example).
     #
     # This is because all the agents communicate everything back here. None of the agents declared in this script print
     # anything to the console on their own! In future examples I will demonstrate how easy it is to swap the UI.
