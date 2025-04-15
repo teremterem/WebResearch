@@ -142,8 +142,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         ctx.reply_out_of_order(search_and_scraping_results)
 
         # Send the (promises of) web search and scraping results to the final answer agent too.
-        # NOTE: We could use `send_out_of_order` instead of `send_message` here too, but we don't really care one way
-        # or another - the `final_answer_agent` is designed to start its work only after all its input is available
+        # NOTE: We could use `send_out_of_order` instead of `send_message` here as well, but we don't really care one
+        # way or another - the `final_answer_agent` is designed to start its work only after all its input is available
         # (all the incoming promises are resolved) anyway.
         final_answer_call.send_message(search_and_scraping_results)
 
@@ -256,7 +256,7 @@ async def page_scraper_agent(
             # This message, apart from being forwarded by the `research_agent` to the `final_answer_agent`, will also
             # be delivered all the way to the user, so let's prevent it from being displayed (unless we wanted the user
             # to see the internal "thinking" process of this agentic system with all its details).
-            # NOTE: We came up with the "not_for_user" attribute name for specifically this app, we could have used any
+            # NOTE: We came up with the "not_for_user" attribute name specifically in this app. We could have used any
             # other name, as long as we properly read it back (see the `main` function at the top of this file).
             "not_for_user": True,
         },
@@ -323,7 +323,7 @@ if __name__ == "__main__":
         errors_as_messages=True,
 
         # # When we set `errors_as_messages` to True, the tracebacks are not included into the message content by
-        # # default, only the class names and error message strings are. If you need to see tracebacks to troubleshoot
-        # # errors, uncomment the line below.
+        # # default, only the class names and the error message strings are. If you need to see tracebacks to
+        # # troubleshoot errors, uncomment the line below.
         # error_tracebacks_in_messages=True,
     ).run(main())
