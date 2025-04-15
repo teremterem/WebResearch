@@ -47,14 +47,8 @@ async def main():
 
     print()
     # Iterate over the individual message promises in the response sequence promise. The async loops below lead to task
-    # switching, so the agent above as well as its "sub-agents" start their work in the background to serve all the
-    # promises.
-    #
-    # NOTE: Even though we are explicitly consuming the promises here, this is not required for the agents to start
-    # their work in the background. By default, they will start regardless of the reason for the task switching (even
-    # if it is not these promises that we are awaiting for). Such behaviour can be prevented by setting `start_soon` to
-    # False. We do not recommend doing so for the whole system globally, however (global `start_soon=False` often
-    # leads to deadlocks).
+    # switching, so the agent above as well as its "sub-agents" will now start their work in the background to serve
+    # all the promises.
     async for message_promise in response_promises:
         # Skip messages that are not intended for the user (you'll see where this attribute is set later)
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
@@ -65,11 +59,23 @@ async def main():
             print(token, end="", flush=True)
         print("\n")
 
-    # NOTE: The `print` statements above are the only `print` statements in the whole application (except for just one
+    # NOTE #1: The `print` statements above are the only `print` statements in the whole application (except for just one
     # `print` statement in `utils.py` which reports if the version of MiniAgents is too old for this example).
     #
     # This is because all the agents communicate everything back here. None of the agents declared in this script print
     # anything to the console on their own! In future examples I will demonstrate how easy it is to swap the UI.
+    #
+    # NOTE #2: Even though we are consuming the promises in the loops above explicitly, this is not strictly required
+    # for the agents to start their work in the background. By default, they will start regardless of the reason for
+    # the task switching (even if those were not the response promises that we were awaiting for in the code above).
+    #
+    # Such behaviour could be prevented by setting `start_soon` to False. However, we do not recommend doing so for the
+    # whole system globally. You could pass `start_soon=False` into `trigger` here and there if you absolutely needed
+    # to prevent some agent or agents from processing in the background until you explicitly `await` for their
+    # responses, but setting it to False for the global `MiniAgents` instance (`MiniAgents(start_soon=False).run(
+    # <app_entrypoint>)` or similar) often leads to deadlocks when the agent interdependencies are more complex.
+    #
+    # In the majority of scenarios, there is hardly any benefit in setting `start_soon` to False for anything at all.
 
 
 @miniagent
