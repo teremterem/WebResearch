@@ -54,31 +54,33 @@ async def main():
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
             continue
         # Iterate over the individual tokens in the message promise (messages that aren't broken down into tokens will
-        # be delivered as single tokens)
+        # be delivered in a single token)
         async for token in message_promise:
             print(token, end="", flush=True)
         print("\n")
 
     # NOTE #1: The `print` statements above are the only `print` statements in the whole application (except for just
-    # one `print` statement in `utils.py` which reports if the installed version of MiniAgents is too old and needs to
-    # be updated).
+    # one other `print` statement in `utils.py` which reports if the installed version of MiniAgents is too old and
+    # needs to be updated).
     #
-    # This is because all the agents communicate everything back here (including their progress and their failures).
+    # This is because all the agents communicate everything back here, including their progress and their failures.
     # None of the agents declared in this script print anything to the console on their own! In future examples I will
     # demonstrate how easy it is to swap the UI (and even connect this whole angentic system to another, bigger AI
     # system instead of exposing it to the user directly) as a consequence of this design.
     #
     # NOTE #2: Even though we are consuming the promises in the loops above explicitly, this is not strictly required
-    # for the agents to start their work in the background. By default, they will start regardless of the reason for
-    # the task switching (even if those were not the response promises that we were awaiting for in the code above).
+    # for the agents to start their work in the background. By default, they will start in the background regardless of
+    # the reason for task switching (even if those were not the response promises that we were awaiting for in the code
+    # above).
     #
     # Such behaviour could be prevented by setting `start_soon` to False. However, we do not recommend doing so for the
     # whole system globally. You could pass `start_soon=False` into `trigger` here and there if you absolutely needed
     # to prevent some agent or agents from processing in the background until you explicitly `await` for their
-    # responses, but setting it to False for the global `MiniAgents` instance (`MiniAgents(start_soon=False).run(
-    # <app_entrypoint>)` or similar) often leads to deadlocks when the agent interdependencies are more complex.
+    # responses, but setting it to False at the level of the global `MiniAgents` instance
+    # (`MiniAgents(start_soon=False).run(<app_entrypoint>)` or similar) often leads to deadlocks when the agent
+    # interdependencies are more complex.
     #
-    # In the majority of scenarios, there is hardly any benefit in setting `start_soon` to False for anything at all.
+    # In the majority of scenarios there is hardly any benefit in setting `start_soon` to False for anything.
 
 
 @miniagent
@@ -93,7 +95,7 @@ async def research_agent(ctx: InteractionContext) -> None:
             "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
-    # There is no built-in MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
+    # There is no built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
     # library directly
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
@@ -116,33 +118,42 @@ async def research_agent(ctx: InteractionContext) -> None:
 
     # We will initiate a call to the final answer agent because we will be collecting input for it as we go along
     # (unlike `trigger`, `initiate_call` does not require all the input messages and/or promises upfront)
-    final_answer_call: AgentCall = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
+    final_answer_call: AgentCall = final_answer_agent.initiate_call(
+        # We will deliver the dialog with the user (which in this version of the app consists of only the user
+        # question) to the `final_answer_agent` as a keyword argument, because the input sequence will be used to pass
+        # the information found on the internet to answer the question. (Each miniagent is capable of receiving a
+        # promise of the input sequence, keyword arguments, and spewing out a promise of the reply sequence.)
+        user_question=await ctx.message_promises,
+    )
 
     # For each identified search query, trigger a web search
     for web_search in parsed.web_searches:
-        web_search_responses = _web_search_agent.trigger(  # No `await` => no blocking, promises are returned instead
+        # No `await` in front of `trigger` means no blocking. A promise of a message sequence is placed into
+        # `search_and_scraping_results` instead.
+        search_and_scraping_results = _web_search_agent.trigger(
             ctx.message_promises,
             search_query=web_search.web_search_query,
             rationale=web_search.rationale,
         )
         # Unlike regular `reply`, `reply_out_of_order` doesn't enforce the order of the messages, it just delivers them
-        # as soon as they are available (useful here, because we want to report the progress of the web searching and
+        # as soon as they are available (useful here, because we want to report the progress of the web search and
         # scraping as soon as things are done, instead of adhering to the order in which the promises were "registered"
-        # as part of the reply sequence).
-        ctx.reply_out_of_order(web_search_responses)
+        # to be part of the response sequence).
+        ctx.reply_out_of_order(search_and_scraping_results)
 
-        # Send the web search and scraping responses to the final answer agent too.
+        # Send the (promises of) web search and scraping results to the final answer agent too.
         # NOTE: We could use `send_out_of_order` instead of `send_message` here too, but we don't really care one way
         # or another - the `final_answer_agent` is designed to start its work only after all its input is available
         # (all the incoming promises are resolved) anyway.
-        final_answer_call.send_message(web_search_responses)
+        final_answer_call.send_message(search_and_scraping_results)
 
-    # Again, no `await` here, we still just exchange promises. The agents that were called start their work in the
-    # background whenever task switching happens.
+    # Again, no `await` below. We are still exchanging promises. The agents that were called will start their work in
+    # the background as soon as task switching happens.
     #
-    # By default, `reply_sequence`, apart from returning the sequence promise, also closes the call that was started
-    # with `initiate_call`. In other words, it "informs" the agent that is being called that there will be no more
-    # input. We could change this behavior by adding a parameter if we needed to: `.reply_sequence(finish_call=False)`
+    # By default, `reply_sequence`, apart from returning a promise of a sequence (of promises of messages, to be
+    # technically precise), also closes the call that was started with `initiate_call`. In other words, it "informs"
+    # the agent that is being called that there will be no more input. We could change this behavior by adding the
+    # following parameter if it was necessary: `.reply_sequence(finish_call=False)`
     ctx.reply(final_answer_call.reply_sequence())
 
 
@@ -173,7 +184,7 @@ async def web_search_agent(
             "well. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
-    # No built-in MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client directly
+    # No built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client directly
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
         messages=message_dicts,
@@ -181,7 +192,7 @@ async def web_search_agent(
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
 
-    # Filter out pages that were already picked for scraping and limit the number of pages to be scraped
+    # Filter out pages that were already picked for scraping and also limit the number of pages to be scraped
     web_pages_to_scrape: list[WebPage] = []
     for web_page in parsed.web_pages:
         if web_page.url not in already_picked_urls:
@@ -190,7 +201,8 @@ async def web_search_agent(
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
 
-    # For each identified web page, trigger scraping (in parallel)
+    # For each identified web page, trigger scraping (no `await` in front of `trigger`, so read this as "schedule for
+    # parallel execution")
     for web_page in web_pages_to_scrape:
         # Return scraping results in order of their availability rather than sequentially (`reply_out_of_order`)
         ctx.reply_out_of_order(
@@ -219,10 +231,10 @@ async def page_scraper_agent(
         page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting the full OpenAI response instead of just passing the response sequence promise forward
-    # because we want to make sure that the final summary was generated without any errors before we report success.
+    # NOTE: We are awaiting for the completed OpenAI response instead of accepting a sequence promise here, because we
+    # want to make sure that the final summary was generated without any errors before we report success.
     page_summary = await OpenAIAgent.trigger(
-        # `OpenAIAgent` is a built-in MiniAgent for text generation by OpenAI
+        # `OpenAIAgent` is a built-in miniagent for text generation by OpenAI
         [
             ctx.message_promises,
             f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
@@ -235,15 +247,17 @@ async def page_scraper_agent(
             "Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
         model=MODEL,
+        # Streaming doesn't really matter for internal use, could be False, could be True
         stream=False,
         # Let's break the flow of the current agent if LLM completion goes wrong (you will see at the very end of this
         # script that we set `errors_as_messages` to True globally for all agents)
         errors_as_messages=False,
         response_metadata={
-            # The outmost message loop will encounter this message along with other messages, let's prevent it from
-            # being displayed to the user.
-            # NOTE: "not_for_user" is an attribute name that we just made up, we could have used any other name, as
-            # long as we read it back in the outmost message loop.
+            # This message, apart from being forwarded by the `research_agent` to the `final_answer_agent`, will also
+            # be delivered all the way to the user, so let's prevent it from being displayed (unless we wanted the user
+            # to see the internal "thinking" process of this agentic system with all its details).
+            # NOTE: We came up with the "not_for_user" attribute name for specifically this app, we could have used any
+            # other name, as long as we properly read it back (see the `main` function at the top of this file).
             "not_for_user": True,
         },
     )
@@ -254,27 +268,32 @@ async def page_scraper_agent(
 @miniagent
 async def final_answer_agent(ctx: InteractionContext, user_question: Union[Message, tuple[Message, ...]]) -> None:
     # Here we await for the incoming `MessageSequencePromise` to materialize into a tuple of concrete `Message` objects
-    # (which would be the result of this `await` if we assigned it to a variable) - if you remember, all the results of
+    # (which would be the result of this `await` if we assigned it to a variable) - as you remember, all the results of
     # the web searching and scraping are sent as input to the `final_answer_agent` (see the `research_agent` above).
     await ctx.message_promises
     # The only reason we do this `await` here is because we do not want the "=== ANSWER: ===" message below (which is
     # available immediately, because it is a concrete string) to be sent to the user earlier than all the web searching
-    # and scraping is done and all the progress reported accordingly.
+    # and scraping is done.
     #
-    # As you might remember, the web searching and scraping progress reports were being returned to the user as "out of
-    # order" messages. Such messages are allowed to be delivered both, earlier as well as later than "ordered" messages
-    # (or other "out of order" messages) in the agent response sequence, depending on the timing of their availability.
+    # As you might remember, the reports of the searching and scraping progress are being returned to the user as "out
+    # of order" messages. Such messages are allowed to be delivered both, earlier as well as later than the "ordered"
+    # messages (or other "out of order" messages, for that matter) in the response sequence of an agent, depending on
+    # the timing of their availability.
     ctx.reply(
         "==========\n"
         "ANSWER:\n"
         "=========="
     )
 
-    # Just to be clear. The answer itself that OpenAI generates (below) does not require you to `await` for incoming
-    # messages explicitly (only the "=== ANSWER: ===" string did). Since the answer generation relies on those messages
-    # as part of the prompt, the answer generation would only have started after everything else was done anyway.
+    # Just to be clear. It's not the answer that is generated by OpenAI (below) that requires you to explicitly `await`
+    # for incoming messages, it is only the "=== ANSWER: ===" part (above) that does. We don't want the user to see the
+    # "=== ANSWER: ===" text first and then start receiving "SEARCHING", "READING PAGE", "SCRAPING SUCCESSFUL", etc.
+    #
+    # Since the generation of the final answer by OpenAI expects all the incoming messages to become part of the prompt
+    # (see the `ctx.message_promises` part of the `trigger` parameters below), it would only have started after
+    # everything else was done regardless of whether you awaited for input explicitly or not.
     ctx.reply(
-        # `OpenAIAgent` is a built-in MiniAgent for text generation by OpenAI
+        # `OpenAIAgent` is a built-in miniagent for text generation by OpenAI
         OpenAIAgent.trigger(
             [
                 "USER QUESTION:",
@@ -299,8 +318,8 @@ if __name__ == "__main__":
         llm_logger_agent=True,
 
         # # Let's make the system as robust as possible by not failing any of the agent flows upon errors (circle those
-        # # errors around as part of message sequences instead - the language model will know to ignore them and
-        # # attempt to answer based on whatever information is available)
+        # # errors around as part of agent communications instead - the language model will know to ignore them and
+        # # will attempt to answer based on whatever information is available)
         errors_as_messages=True,
 
         # # When we set `errors_as_messages` to True, the tracebacks are not included into the message content by
