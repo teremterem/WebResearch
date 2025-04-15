@@ -63,7 +63,7 @@ async def scrape_web_page(url: str) -> str:
 def check_miniagents_version():
     try:
         miniagents_version: tuple[int, int, int] = tuple(map(int, miniagents.__version__.split(".")))
-        valid_miniagents_version = miniagents_version >= (0, 0, 28)
+        valid_miniagents_version = miniagents_version >= (0, 0, 29)
     except ValueError:
         # if any of the version components are not integers, we will consider it as a later version
         # (before 0.0.28 there were only numeric versions)
@@ -74,6 +74,6 @@ def check_miniagents_version():
 
     if not valid_miniagents_version:
         raise ValueError(
-            "You need MiniAgents v0.0.28 or later to run this example.\n\n"
+            "You need MiniAgents v0.0.29 or later to run this example.\n\n"
             "Please update MiniAgents with `pip install -U miniagents`\n"
         )
