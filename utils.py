@@ -17,7 +17,7 @@ load_dotenv()
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
 
-BRIGHT_DATA_TIMEOUT = 30
+BRIGHT_DATA_TIMEOUT = 20
 
 # Allow only a limited number of concurrent web searches
 searching_semaphore = asyncio.Semaphore(5)
@@ -75,7 +75,9 @@ def check_miniagents_version():
 
     if not valid_miniagents_version:
         print(
-            "\nYou need MiniAgents v0.0.29 or later to run this example.\n\n"
+            "\n"
+            "You need MiniAgents v0.0.29 or later to run this example.\n"
+            "\n"
             "Please update MiniAgents with `pip install -U miniagents`\n"
         )
         sys.exit(1)
