@@ -41,11 +41,20 @@ class WebPagesToBeRead(BaseModel):
 async def main():
     question = input("\nEnter your question: ")
 
-    # Invoke the main agent (no `await` is placed in front of the call, hence this is a non-blocking operation)
+    # Invoke the main agent (no `await` is placed in front of the call, hence this is a non-blocking operation, no
+    # processing starts just yet)
     response_promises: MessageSequencePromise = research_agent.trigger(question)
 
     print()
-    # Iterate over the individual message promises in the message sequence promise
+    # Iterate over the individual message promises in the response sequence promise. The async loops below lead to task
+    # switching, so the agent above as well as its "sub-agents" start their work in the background to serve all the
+    # promises.
+    #
+    # NOTE: Even though we are explicitly consuming the promises here, this is not required for the agents to start
+    # their work in the background. By default, they will start regardless of the reason for the task switching (even
+    # if it is not these promises that we are awaiting for). Such behaviour can be prevented by setting `start_soon` to
+    # False. We do not recommend doing so for the whole system globally, however (global `start_soon=False` often
+    # leads to deadlocks).
     async for message_promise in response_promises:
         # Skip messages that are not intended for the user (you'll see where this attribute is set later)
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
@@ -88,7 +97,8 @@ async def research_agent(ctx: InteractionContext) -> None:
 
     already_picked_urls = set[str]()
     # Let's fork the `web_search_agent` to introduce mutable state - we want it to remember across multiple calls
-    # which urls were already picked for scraping
+    # which urls were already picked for scraping, so it doesn't scrape them again (same pages may be present in
+    # multiple search results).
     _web_search_agent = web_search_agent.fork(
         non_freezable_kwargs={
             "already_picked_urls": already_picked_urls,
