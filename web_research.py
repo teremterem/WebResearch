@@ -60,10 +60,13 @@ async def main():
         print("\n")
 
     # NOTE #1: The `print` statements above are the only `print` statements in the whole application (except for just
-    # one `print` statement in `utils.py` which reports if the version of MiniAgents is too old for this example).
+    # one `print` statement in `utils.py` which reports if the installed version of MiniAgents is too old and needs to
+    # be updated).
     #
-    # This is because all the agents communicate everything back here. None of the agents declared in this script print
-    # anything to the console on their own! In future examples I will demonstrate how easy it is to swap the UI.
+    # This is because all the agents communicate everything back here (including their progress and their failures).
+    # None of the agents declared in this script print anything to the console on their own! In future examples I will
+    # demonstrate how easy it is to swap the UI (and even connect this whole angentic system to another, bigger AI
+    # system instead of exposing it to the user directly) as a consequence of this design.
     #
     # NOTE #2: Even though we are consuming the promises in the loops above explicitly, this is not strictly required
     # for the agents to start their work in the background. By default, they will start regardless of the reason for
