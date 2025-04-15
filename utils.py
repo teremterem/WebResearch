@@ -75,7 +75,9 @@ def check_miniagents_version():
 
     if not valid_miniagents_version:
         print(
-            "\nYou need MiniAgents v0.0.29 or later to run this example.\n\n"
+            "\n"
+            "You need MiniAgents v0.0.29 or later to run this example.\n"
+            "\n"
             "Please update MiniAgents with `pip install -U miniagents`\n"
         )
         sys.exit(1)

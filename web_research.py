@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Union
 
 from dotenv import load_dotenv
-from miniagents import InteractionContext, Message, MiniAgents, miniagent
+from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -41,16 +41,26 @@ class WebPagesToBeRead(BaseModel):
 async def main():
     question = input("\nEnter your question: ")
 
-    response_promises = research_agent.trigger(question)
+    # Invoke the main agent (no `await` is placed in front of the call, hence this is a non-blocking operation)
+    response_promises: MessageSequencePromise = research_agent.trigger(question)
 
-    # TODO the prints below are the only prints in the script
     print()
+    # Iterate over the individual message promises in the message sequence promise
     async for message_promise in response_promises:
+        # Skip messages that are not intended for the user (you'll see where this attribute is set later)
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
             continue
+        # Iterate over the individual tokens in the message promise (messages that aren't broken down into tokens will
+        # be delivered as single tokens)
         async for token in message_promise:
             print(token, end="", flush=True)
         print("\n")
+
+    # NOTE: The `print` statements above are the only `print` statements in the whole application (except for just one
+    # `print` statement in `utils.py` which reports if the version of MiniAgents is too old for this example).
+    #
+    # This is because all the agents communicate everything back here. None of the agents declared in this script print
+    # anything to the console on their own! In future examples I will demonstrate how easy it is to swap the UI.
 
 
 @miniagent
@@ -58,16 +68,18 @@ async def research_agent(ctx: InteractionContext) -> None:
     ctx.reply("RESEARCHING...")
 
     # First, analyze the user's question and break it down into search queries
-    messages = await aprepare_dicts_for_openai(
+    message_dicts = await aprepare_dicts_for_openai(
         ctx.message_promises,
         system=(
             "Your job is to breakdown the user's question into a list of web searches that need to be done to answer "
             "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
+    # There is no builtin MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
+    # library directly
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
-        messages=messages,
+        messages=message_dicts,
         response_format=WebSearchesToBeDone,
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
@@ -83,21 +95,34 @@ async def research_agent(ctx: InteractionContext) -> None:
         },
     )
 
-    final_answer_call = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
+    # We will initiate a call to the final answer agent because we will be collecting the input for it on the fly
+    # (unlike `trigger`, `initiate_call` does not require all the input messages and/or promises upfront)
+    final_answer_call: AgentCall = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
 
-    # For each identified search query, trigger a web search (in parallel)
+    # For each identified search query, trigger a web search
     for web_search in parsed.web_searches:
-        web_search_responses = _web_search_agent.trigger(
+        web_search_responses = _web_search_agent.trigger(  # No `await` => no blocking, promises are returned instead
             ctx.message_promises,
             search_query=web_search.web_search_query,
             rationale=web_search.rationale,
         )
-        # Keep the user informed about the progress
-        # (also, whichever messages are available first, should be delivered first)
+        # Unlike regular `reply`, `reply_out_of_order` doesn't enforce the order of the messages, it just delivers them
+        # as soon as they are available (useful here, because we want to report the progress of the web searching and
+        # scraping as soon as things are done)
         ctx.reply_out_of_order(web_search_responses)
 
+        # Send the web search responses to the final answer agent too.
+        # NOTE: We could use `send_out_of_order` instead of `send_message` here too, but we don't really care one way
+        # or another - the `final_answer_agent` is designed to start its work only after all its input is available
+        # (all the incoming promises are resolved).
         final_answer_call.send_message(web_search_responses)
 
+    # Again, no `await` here, we still just exchange promises. The agents that were called start their work in the
+    # background whenever task switching happens.
+    #
+    # By default, `reply_sequence`, apart from returning the sequence promise, also closes the call, or, in other
+    # words, informs the agent that is being called that there will be no more input. (We can change this behavior by
+    # passing `finish_call=False` to `reply_sequence`.)
     ctx.reply(final_answer_call.reply_sequence())
 
 
@@ -116,7 +141,7 @@ async def web_search_agent(
     ctx.reply(f"SEARCH SUCCESSFUL: {search_query}")
 
     # Analyze search results to identify relevant web pages
-    messages = await aprepare_dicts_for_openai(
+    message_dicts = await aprepare_dicts_for_openai(
         [
             ctx.message_promises,
             f"RATIONALE: {rationale}\n\nSEARCH QUERY: {search_query}\n\nSEARCH RESULTS:\n\n{search_results}",
@@ -130,7 +155,7 @@ async def web_search_agent(
     )
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
-        messages=messages,
+        messages=message_dicts,
         response_format=WebPagesToBeRead,
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
