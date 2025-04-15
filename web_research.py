@@ -6,14 +6,14 @@ from datetime import datetime
 from typing import Union
 
 from dotenv import load_dotenv
-from miniagents import InteractionContext, Message, MiniAgent, MiniAgents, miniagent
+from miniagents import InteractionContext, Message, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 load_dotenv()
 
-MODEL = "gpt-4o-mini"  # "gpt-4o"
+MODEL = "gpt-4o"  # "gpt-4o-mini"
 SMARTER_MODEL = "o3-mini"
 MAX_WEB_PAGES_PER_SEARCH = 3
 

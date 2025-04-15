@@ -1,6 +1,5 @@
 import asyncio
 import os
-import threading
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 
@@ -20,9 +19,9 @@ BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CRED
 BRIGHT_DATA_TIMEOUT = 30
 
 # Allow only a limited number of concurrent web searches
-searching_semaphore = asyncio.Semaphore(3)
+searching_semaphore = asyncio.Semaphore(5)
 # Allow only a limited number of concurrent web page scrapings
-scraping_thread_pool = ThreadPoolExecutor(max_workers=3)
+scraping_thread_pool = ThreadPoolExecutor(max_workers=5)
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
