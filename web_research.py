@@ -93,7 +93,7 @@ async def research_agent(ctx: InteractionContext) -> None:
             "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
-    # There is no builtin MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
+    # There is no built-in MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
     # library directly
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
@@ -107,14 +107,14 @@ async def research_agent(ctx: InteractionContext) -> None:
     already_picked_urls = set[str]()
     # Let's fork the `web_search_agent` to introduce mutable state - we want it to remember across multiple calls
     # which urls were already picked for scraping, so it doesn't scrape them again (same pages may be present in
-    # multiple search results).
+    # multiple search results)
     _web_search_agent = web_search_agent.fork(
         non_freezable_kwargs={
             "already_picked_urls": already_picked_urls,
         },
     )
 
-    # We will initiate a call to the final answer agent because we will be collecting the input for it on the fly
+    # We will initiate a call to the final answer agent because we will be collecting input for it as we go along
     # (unlike `trigger`, `initiate_call` does not require all the input messages and/or promises upfront)
     final_answer_call: AgentCall = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
 
@@ -127,21 +127,22 @@ async def research_agent(ctx: InteractionContext) -> None:
         )
         # Unlike regular `reply`, `reply_out_of_order` doesn't enforce the order of the messages, it just delivers them
         # as soon as they are available (useful here, because we want to report the progress of the web searching and
-        # scraping as soon as things are done)
+        # scraping as soon as things are done, instead of adhering to the order in which the promises were "registered"
+        # as part of the reply sequence).
         ctx.reply_out_of_order(web_search_responses)
 
-        # Send the web search responses to the final answer agent too.
+        # Send the web search and scraping responses to the final answer agent too.
         # NOTE: We could use `send_out_of_order` instead of `send_message` here too, but we don't really care one way
         # or another - the `final_answer_agent` is designed to start its work only after all its input is available
-        # (all the incoming promises are resolved).
+        # (all the incoming promises are resolved) anyway.
         final_answer_call.send_message(web_search_responses)
 
     # Again, no `await` here, we still just exchange promises. The agents that were called start their work in the
     # background whenever task switching happens.
     #
-    # By default, `reply_sequence`, apart from returning the sequence promise, also closes the call, or, in other
-    # words, informs the agent that is being called that there will be no more input. (We can change this behavior by
-    # passing `finish_call=False` to `reply_sequence`.)
+    # By default, `reply_sequence`, apart from returning the sequence promise, also closes the call that was started
+    # with `initiate_call`. In other words, it "informs" the agent that is being called that there will be no more
+    # input. We could change this behavior by adding a parameter if we needed to: `.reply_sequence(finish_call=False)`
     ctx.reply(final_answer_call.reply_sequence())
 
 
@@ -172,6 +173,7 @@ async def web_search_agent(
             "well. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
+    # No built-in MiniAgent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client directly
     response = await openai_client.beta.chat.completions.parse(
         model=SMARTER_MODEL,
         messages=message_dicts,
@@ -179,6 +181,7 @@ async def web_search_agent(
     )
     parsed: WebPagesToBeRead = response.choices[0].message.parsed
 
+    # Filter out pages that were already picked for scraping and limit the number of pages to be scraped
     web_pages_to_scrape: list[WebPage] = []
     for web_page in parsed.web_pages:
         if web_page.url not in already_picked_urls:
@@ -189,7 +192,7 @@ async def web_search_agent(
 
     # For each identified web page, trigger scraping (in parallel)
     for web_page in web_pages_to_scrape:
-        # Return scraping results in order of their availability rather than sequentially
+        # Return scraping results in order of their availability rather than sequentially (`reply_out_of_order`)
         ctx.reply_out_of_order(
             page_scraper_agent.trigger(
                 ctx.message_promises,
@@ -216,9 +219,10 @@ async def page_scraper_agent(
         page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting the full OpenAI response instead of just passing the sequence promise forward because we
-    # want to make sure that the final summary was generated without any errors before we report success.
+    # NOTE: We are awaiting the full OpenAI response instead of just passing the response sequence promise forward
+    # because we want to make sure that the final summary was generated without any errors before we report success.
     page_summary = await OpenAIAgent.trigger(
+        # `OpenAIAgent` is a built-in MiniAgent for text generation by OpenAI
         [
             ctx.message_promises,
             f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
@@ -243,8 +247,8 @@ async def page_scraper_agent(
             "not_for_user": True,
         },
     )
-    ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
-    ctx.reply(page_summary)
+    ctx.reply(f"SCRAPING SUCCESSFUL: {url}")  # Let's report success
+    ctx.reply(page_summary)  # and send the summary
 
 
 @miniagent
@@ -270,6 +274,7 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
     # messages explicitly (only the "=== ANSWER: ===" string did). Since the answer generation relies on those messages
     # as part of the prompt, the answer generation would only have started after everything else was done anyway.
     ctx.reply(
+        # `OpenAIAgent` is a built-in MiniAgent for text generation by OpenAI
         OpenAIAgent.trigger(
             [
                 "USER QUESTION:",
