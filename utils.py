@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 
@@ -73,7 +74,8 @@ def check_miniagents_version():
         valid_miniagents_version = False
 
     if not valid_miniagents_version:
-        raise ValueError(
-            "You need MiniAgents v0.0.29 or later to run this example.\n\n"
+        print(
+            "\nYou need MiniAgents v0.0.29 or later to run this example.\n\n"
             "Please update MiniAgents with `pip install -U miniagents`\n"
         )
+        sys.exit(1)
