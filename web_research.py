@@ -204,17 +204,17 @@ async def page_scraper_agent(
 ) -> None:
     ctx.reply(f"READING PAGE: {url}\n{rationale}")
 
-    # Scrape the web page
     try:
+        # Scrape the web page
         page_content = await scrape_web_page(url)
     except Exception:
-        # let's give it a second chance
+        # Let's give it a second chance
         ctx.reply(f"RETRYING: {url}")
         page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting here instead of just passing a promise forward because we want to make sure that the final
-    # summary was generated without any errors before we report success.
+    # NOTE: We are awaiting the full OpenAI response instead of just passing the sequence promise forward because we
+    # want to make sure that the final summary was generated without any errors before we report success.
     page_summary = await OpenAIAgent.trigger(
         [
             ctx.message_promises,
@@ -229,8 +229,8 @@ async def page_scraper_agent(
         ),
         model=MODEL,
         stream=False,
-        # Let's break the flow of this agent if LLM completion goes wrong (remember, we initially set
-        # `errors_as_messages` as True globally for all agents)
+        # Let's break the flow of the current agent if LLM completion goes wrong (you will see at the very end of this
+        # script that we set `errors_as_messages` to True globally for all agents)
         errors_as_messages=False,
         response_metadata={
             # The outmost message loop will encounter this message along with other messages, let's prevent it from
@@ -240,9 +240,6 @@ async def page_scraper_agent(
             "not_for_user": True,
         },
     )
-
-    # There is no await between the following two replies (no task switching happens), hence they will always go one
-    # after another and no "out of order" message from a parallel agent will be mixed in.
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
     ctx.reply(page_summary)
 
@@ -288,11 +285,14 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
 
 if __name__ == "__main__":
     MiniAgents(
-        # Make OpenAIAgent (as well as any other LLM miniagent) to log LLM requests and responses as markdown files in
-        # the `llm_logs` directory under the current working directory (helps understand what happens under the hood).
+        # # Make OpenAIAgent (as well as any other LLM miniagent) log LLM requests and responses as markdown files in
+        # # the `llm_logs` directory under the current working directory (helps understand what happens under the
+        # # hood).
         llm_logger_agent=True,
-        # Let's make the system as robust as possible by not failing the agent flow upon errors (circle those errors as
-        # part of the message sequences instead, the LLM will know to ignore them)
+
+        # # Let's make the system as robust as possible by not failing any of the agent flows upon errors (circle those
+        # # errors around as part of message sequences instead - the language model will know to ignore them and
+        # # attempt to answer based on whatever information is available)
         errors_as_messages=True,
 
         # # When we set `errors_as_messages` to True, the tracebacks are not included into the message content by
