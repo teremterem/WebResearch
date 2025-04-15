@@ -1,41 +1,23 @@
-import asyncio
-import os
+from utils import check_miniagents_version, fetch_google_search, scrape_web_page
+
+check_miniagents_version()
+
 from datetime import datetime
-from typing import Any
+from typing import Union
 
 from dotenv import load_dotenv
-import httpx
-from markdownify import markdownify as md
-from miniagents import InteractionContext, MiniAgent, MiniAgents, miniagent
+from miniagents import InteractionContext, Message, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
-from pydantic import BaseModel, ValidationError
-from selenium.webdriver import Remote, ChromeOptions
-from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
-from selenium.webdriver.remote.client_config import ClientConfig
+from pydantic import BaseModel
 
 load_dotenv()
 
-MODEL = "gpt-4o-mini"  # "gpt-4o"
-
-BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
-BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
-
-BRIGHT_DATA_TIMEOUT = 30
+MODEL = "gpt-4o"  # "gpt-4o-mini"
+SMARTER_MODEL = "o3-mini"
 MAX_WEB_PAGES_PER_SEARCH = 3
 
-# Allow only a limited number of concurrent web searches and web page scrapings
-searching_semaphore = asyncio.Semaphore(3)
-scraping_semaphore = asyncio.Semaphore(3)
-
 openai_client = AsyncOpenAI()
-try:
-    openai_agent = OpenAIAgent.fork(non_freezable_kwargs={"async_client": openai_client})
-except ValidationError as e:
-    raise ValueError(
-        "You need MiniAgents v0.0.28 or later to run this example.\n\n"
-        "Please update MiniAgents with `pip install -U miniagents`\n"
-    ) from e
 
 
 class WebSearch(BaseModel):
@@ -61,6 +43,7 @@ async def main():
 
     response_promises = research_agent.trigger(question)
 
+    # TODO the prints below are the only prints in the script
     print()
     async for message_promise in response_promises:
         if getattr(message_promise.preliminary_metadata, "not_for_user", False):
@@ -83,42 +66,24 @@ async def research_agent(ctx: InteractionContext) -> None:
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model=MODEL,
+        model=SMARTER_MODEL,
         messages=messages,
         response_format=WebSearchesToBeDone,
     )
     parsed: WebSearchesToBeDone = response.choices[0].message.parsed
 
-    final_answer_call = openai_agent.initiate_call(
-        system=(
-            "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
-            "Current date is " + datetime.now().strftime("%Y-%m-%d")
-        ),
-        model=MODEL,
-    )
-    final_answer_call.send_message(
-        [
-            "USER QUESTION:",
-            ctx.message_promises,
-            "INFORMATION FOUND ON THE INTERNET:",
-        ],
-    )
-
     ctx.reply(f"RUNNING {len(parsed.web_searches)} WEB SEARCHES")
 
-    already_scraped_urls = set[str]()
-    # Let's fork the `page_scraper_agent` and `web_search_agent` to introduce mutable state - we want them to remember
-    # across multiple calls which urls were already scraped
+    already_picked_urls = set[str]()
+    # Let's fork the `web_search_agent` to introduce mutable state - we want it to remember across multiple calls
+    # which urls were already picked for scraping
     _web_search_agent = web_search_agent.fork(
         non_freezable_kwargs={
-            "_page_scraper_agent": page_scraper_agent.fork(
-                non_freezable_kwargs={
-                    "already_scraped_urls": already_scraped_urls,
-                },
-            ),
-            "already_scraped_urls": already_scraped_urls,
+            "already_picked_urls": already_picked_urls,
         },
     )
+
+    final_answer_call = final_answer_agent.initiate_call(user_question=await ctx.message_promises)
 
     # For each identified search query, trigger a web search (in parallel)
     for web_search in parsed.web_searches:
@@ -130,11 +95,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         # Keep the user informed about the progress
         # (also, whichever messages are available first, should be delivered first)
         ctx.reply_out_of_order(web_search_responses)
-        final_answer_call.send_message(web_search_responses)
 
-        ctx.make_sure_to_wait(web_search_responses)
-    await ctx.await_now(suppress_deadlock_warning=True)
-    ctx.reply("FINAL ANSWER:")
+        final_answer_call.send_message(web_search_responses)
 
     ctx.reply(final_answer_call.reply_sequence())
 
@@ -144,10 +106,9 @@ async def web_search_agent(
     ctx: InteractionContext,
     search_query: str,
     rationale: str,
-    already_scraped_urls: set[str],
-    _page_scraper_agent: MiniAgent,
+    already_picked_urls: set[str],
 ) -> None:
-    ctx.reply(f"> {rationale}\nSEARCHING FOR: {search_query}")
+    ctx.reply(f'SEARCHING FOR "{search_query}"\n{rationale}')
 
     # Execute the search query
     search_results = await fetch_google_search(search_query)
@@ -168,7 +129,7 @@ async def web_search_agent(
         ),
     )
     response = await openai_client.beta.chat.completions.parse(
-        model=MODEL,
+        model=SMARTER_MODEL,
         messages=messages,
         response_format=WebPagesToBeRead,
     )
@@ -176,18 +137,17 @@ async def web_search_agent(
 
     web_pages_to_scrape: list[WebPage] = []
     for web_page in parsed.web_pages:
-        if web_page.url not in already_scraped_urls:
+        if web_page.url not in already_picked_urls:
             web_pages_to_scrape.append(web_page)
+            already_picked_urls.add(web_page.url)
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
-
-    ctx.reply(f"READING {len(web_pages_to_scrape)} WEB PAGES")
 
     # For each identified web page, trigger scraping (in parallel)
     for web_page in web_pages_to_scrape:
         # Return scraping results in order of their availability rather than sequentially
         ctx.reply_out_of_order(
-            _page_scraper_agent.trigger(
+            page_scraper_agent.trigger(
                 ctx.message_promises,
                 url=web_page.url,
                 rationale=web_page.rationale,
@@ -200,17 +160,21 @@ async def page_scraper_agent(
     ctx: InteractionContext,
     url: str,
     rationale: str,
-    already_scraped_urls: set[str],
 ) -> None:
-    ctx.reply(f"> {rationale}\nREADING PAGE: {url}")
+    ctx.reply(f"READING PAGE: {url}\n{rationale}")
 
     # Scrape the web page
-    page_content = await scrape_web_page(url)
+    try:
+        page_content = await scrape_web_page(url)
+    except Exception:
+        # let's give it a second chance
+        ctx.reply(f"RETRYING: {url}")
+        page_content = await scrape_web_page(url)
 
     # Extract relevant information from the page content.
-    # NOTE: We are awaiting for the final summary from the LLM because we want to make sure everything went smoothly
-    # before we mark the url as already scraped and report success.
-    page_summary_message = await openai_agent.trigger(
+    # NOTE: We are awaiting here instead of just passing a promise forward because we want to make sure that the final
+    # summary was generated without any errors before we report success.
+    page_summary = await OpenAIAgent.trigger(
         [
             ctx.message_promises,
             f"URL: {url}\nRATIONALE: {rationale}\n\nWEB PAGE CONTENT:\n\n{page_content}",
@@ -228,8 +192,6 @@ async def page_scraper_agent(
         # `errors_as_messages` as True globally for all agents)
         errors_as_messages=False,
         response_metadata={
-            # We will be feeding the response back to the LLM, let's make it look like this message came from the user
-            "role": "user",
             # The outmost message loop will encounter this message along with other messages, let's prevent it from
             # being displayed to the user.
             # NOTE: "not_for_user" is an attribute name that we just made up, we could have used any other name, as
@@ -238,43 +200,32 @@ async def page_scraper_agent(
         },
     )
 
-    already_scraped_urls.add(url)
-
-    # There is no await between the following two replies (no task switching happens), hence they will alway go one
+    # There is no await between the following two replies (no task switching happens), hence they will always go one
     # after another and no "out of order" message from a parallel agent will be mixed in.
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")
-    ctx.reply(page_summary_message)
+    ctx.reply(page_summary)
 
 
-async def fetch_google_search(query: str) -> dict[str, Any]:
-    async with searching_semaphore:
-        async with httpx.AsyncClient(
-            proxy=f"https://{BRIGHTDATA_SERP_API_CREDS}@brd.superproxy.io:33335",
-            verify=False,
-            timeout=BRIGHT_DATA_TIMEOUT,
-        ) as client:
-            response = await client.get(f"https://www.google.com/search?q={query}&brd_json=1")
+@miniagent
+async def final_answer_agent(ctx: InteractionContext, user_question: Union[Message, tuple[Message, ...]]) -> None:
+    await ctx.message_promises  # TODO await because we don't want premature "FINAL ANSWER:" message
+    ctx.reply("FINAL ANSWER:")
 
-    return response.json()
-
-
-async def scrape_web_page(url: str) -> str:
-    def _scrape_web_page_sync(url: str) -> str:
-        remote_server_addr = "https://brd.superproxy.io:9515"
-        client_config = ClientConfig(
-            remote_server_addr=remote_server_addr,
-            username=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[0],
-            password=BRIGHTDATA_SCRAPING_BROWSER_CREDS.split(":")[1],
-            timeout=BRIGHT_DATA_TIMEOUT,
+    ctx.reply(
+        OpenAIAgent.trigger(
+            [
+                "USER QUESTION:",
+                user_question,
+                "INFORMATION FOUND ON THE INTERNET:",
+                ctx.message_promises,
+            ],
+            system=(
+                "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
+                "Current date is " + datetime.now().strftime("%Y-%m-%d")
+            ),
+            model=MODEL,
         )
-        sbr_connection = ChromiumRemoteConnection(remote_server_addr, "goog", "chrome", client_config=client_config)
-        with Remote(sbr_connection, options=ChromeOptions()) as driver:
-            driver.get(url)
-            return driver.page_source
-
-    async with scraping_semaphore:
-        # Selenium doesn't support asyncio, so we need to run it in a thread
-        return md(await asyncio.to_thread(_scrape_web_page_sync, url))
+    )
 
 
 if __name__ == "__main__":
@@ -282,4 +233,5 @@ if __name__ == "__main__":
         llm_logger_agent=True,
         # let's make the system as robust as possible by not failing on errors
         errors_as_messages=True,
+        # error_tracebacks_in_messages=True,
     ).run(main())
