@@ -25,7 +25,6 @@ This system demonstrates two key strengths of MiniAgents:
 Every interaction between agents happens through message sequence promises:
 
 - `web_search_agent.trigger()` returns promises, not actual results
-- When appending to `collected_web_information`, we're appending promises
 - The final synthesis waits for the promises to be resolved
 
 ### 2. Non-blocking Parallelism
@@ -75,9 +74,10 @@ I'm thinking of moving from Lviv to Kyiv — what should I know about the cost o
 
 The system consists of three main agents:
 
-1. **Research Agent**: Coordinates the workflow, breaks down questions into search queries, and synthesizes the final answer
+1. **Research Agent**: Coordinates the workflow, breaks down questions into search queries
 2. **Web Search Agent**: Executes searches and identifies relevant web pages
 3. **Page Scraper Agent**: Extracts information from web pages
+4. **Final Answer Agent**: Synthesizes the final answer
 
 All agents communicate asynchronously through MiniAgents' promise-based architecture.
 
