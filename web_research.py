@@ -10,6 +10,7 @@ WebResearch is a multi-agent system that:
 Please refer to the README.md of this repository to learn how to run the application.
 """
 
+import asyncio
 from utils import check_miniagents_version, fetch_google_search, scrape_web_page
 
 check_miniagents_version()
@@ -26,8 +27,9 @@ from pydantic import BaseModel
 load_dotenv()
 
 MODEL = "gpt-4o"  # "gpt-4o-mini"
-SMARTER_MODEL = "o3-mini"
+SMARTER_MODEL = "o4-mini"  # "o3"
 MAX_WEB_PAGES_PER_SEARCH = 3
+SLEEP_BEFORE_RETRY = 3
 
 openai_client = AsyncOpenAI()
 
@@ -161,8 +163,14 @@ async def web_search_agent(
 ) -> None:
     ctx.reply(f'SEARCHING FOR "{search_query}"\n{rationale}')
 
-    # Execute the search query
-    search_results = await fetch_google_search(search_query)
+    try:
+        # Execute the search query
+        search_results = await fetch_google_search(search_query)
+    except Exception:
+        # Something went wrong upon the first attempt - let's give Bright Data SERP API a second chance...
+        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        ctx.reply(f"RETRYING SEARCH: {search_query}")
+        search_results = await fetch_google_search(search_query)
 
     ctx.reply(f"SEARCH SUCCESSFUL: {search_query}")
 
@@ -223,6 +231,7 @@ async def page_scraper_agent(
         page_content = await scrape_web_page(url)
     except Exception:
         # Something went wrong upon the first attempt - let's give Bright Data Scraping Browser a second chance...
+        await asyncio.sleep(SLEEP_BEFORE_RETRY)
         ctx.reply(f"RETRYING: {url}")
         page_content = await scrape_web_page(url)
 
