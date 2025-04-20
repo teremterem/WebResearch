@@ -16,11 +16,9 @@ WebResearch is a multi-agent system that:
 
 All built with procedural code simplicity while benefiting from MiniAgents' automatic parallelism.
 
-<p align="center">
-    <a href="https://github.com/teremterem/MiniAgents">
-        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
-    </a>
-</p>
+<a href="https://github.com/teremterem/MiniAgents">
+    <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
+</a>
 
 ## How It Works
 
