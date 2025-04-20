@@ -4,12 +4,6 @@
 
 A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
 
-<p align="center">
-    <a href="https://github.com/teremterem/MiniAgents">
-        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
-    </a>
-</p>
-
 ## Overview
 
 WebResearch is a multi-agent system that:
@@ -21,6 +15,12 @@ WebResearch is a multi-agent system that:
 5. Synthesizes a comprehensive answer
 
 All built with procedural code simplicity while benefiting from MiniAgents' automatic parallelism.
+
+<p align="center">
+    <a href="https://github.com/teremterem/MiniAgents">
+        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
+    </a>
+</p>
 
 ## How It Works
 
