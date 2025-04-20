@@ -16,10 +16,6 @@ WebResearch is a multi-agent system that:
 
 All built with procedural code simplicity while benefiting from MiniAgents' automatic parallelism.
 
-<a href="https://github.com/teremterem/MiniAgents">
-    <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
-</a>
-
 ## How It Works
 
 This system demonstrates two key strengths of MiniAgents:
@@ -94,3 +90,7 @@ MiniAgents is an open-source, async-first Python framework for building multi-ag
 3. **Immutable message philosophy**: Uses immutable, Pydantic-based messages that eliminate race conditions and data corruption concerns.
 
 Learn more: [MiniAgents GitHub Repository](https://github.com/teremterem/MiniAgents)
+
+<a href="https://github.com/teremterem/MiniAgents">
+    <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
+</a>
