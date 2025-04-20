@@ -335,6 +335,7 @@ if __name__ == "__main__":
     MiniAgents(
         # # Make OpenAIAgent (as well as any other LLM miniagent) log LLM requests and responses as markdown files in
         # # the `llm_logs` folder under the current working directory (helps understand what happens under the hood).
+        # # TODO encourage the reader to check `llm_logs` folder to see what LLM requests and responses look like ?
         llm_logger_agent=True,
         # # Let's make the system as robust as possible by not failing any of the agents upon errors (circle those
         # # errors around as part of agent communications instead - the language model will know to ignore them and
