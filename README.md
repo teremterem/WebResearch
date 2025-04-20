@@ -2,11 +2,18 @@
 
 # WebResearch
 
-A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
-
-<a href="https://github.com/teremterem/MiniAgents" target="_blank">
-  <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="128" height="128">
-</a>
+<table>
+  <tr>
+    <td width="192" height="192">
+      <a href="https://github.com/teremterem/MiniAgents">
+        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo">
+      </a>
+    </td>
+    <td style="vertical-align: top;">
+      A demonstration of the <a href="https://github.com/teremterem/MiniAgents">MiniAgents</a> framework showcasing an AI-powered web research system.
+    </td>
+  </tr>
+</table>
 
 ## Overview
 
