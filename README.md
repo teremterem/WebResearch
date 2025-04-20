@@ -4,6 +4,8 @@
 
 A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
 
+![MiniAgents Logo](https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg)
+
 ## Overview
 
 WebResearch is a multi-agent system that:
