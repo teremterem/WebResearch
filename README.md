@@ -4,7 +4,9 @@
 
 A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
 
-![MiniAgents Logo](https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg)
+<a href="https://github.com/teremterem/MiniAgents">
+  <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="128" height="128">
+</a>
 
 ## Overview
 
