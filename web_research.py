@@ -7,6 +7,8 @@ WebResearch is a multi-agent system that:
 4. Scrapes and extracts information from those pages
 5. Synthesizes a comprehensive answer
 
+All the agents are built using the MiniAgents framework.
+
 Please refer to the README.md of this repository to learn how to run the application.
 """
 

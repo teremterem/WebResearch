@@ -91,6 +91,8 @@ MiniAgents is an open-source, async-first Python framework for building multi-ag
 
 Learn more: [MiniAgents GitHub Repository](https://github.com/teremterem/MiniAgents)
 
-<a href="https://github.com/teremterem/MiniAgents">
-    <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="128" height="128">
-</a>
+<p align="center">
+    <a href="https://github.com/teremterem/MiniAgents">
+        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="128" height="128">
+    </a>
+</p>
