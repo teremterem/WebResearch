@@ -83,12 +83,6 @@ All agents communicate asynchronously through MiniAgents' promise-based architec
 
 ## About MiniAgents
 
-<p align="center">
-    <a href="https://github.com/teremterem/MiniAgents">
-        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
-    </a>
-</p>
-
 MiniAgents is an open-source, async-first Python framework for building multi-agent AI systems with an innovative approach to parallelism. Key advantages:
 
 1. **Write procedural code, get parallel execution**: Unlike graph-based frameworks, MiniAgents lets you write straightforward sequential code.
@@ -96,3 +90,9 @@ MiniAgents is an open-source, async-first Python framework for building multi-ag
 3. **Immutable message philosophy**: Uses immutable, Pydantic-based messages that eliminate race conditions and data corruption concerns.
 
 Learn more: [MiniAgents GitHub Repository](https://github.com/teremterem/MiniAgents)
+
+<p align="center">
+    <a href="https://github.com/teremterem/MiniAgents">
+        <img src="https://github.com/teremterem/MiniAgents/raw/main/images/logo-miniagents-colored.jpeg" alt="MiniAgents Logo" width="192" height="192">
+    </a>
+</p>
