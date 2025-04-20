@@ -163,8 +163,14 @@ async def web_search_agent(
 ) -> None:
     ctx.reply(f'SEARCHING FOR "{search_query}"\n{rationale}')
 
-    # Execute the search query
-    search_results = await fetch_google_search(search_query)
+    try:
+        # Execute the search query
+        search_results = await fetch_google_search(search_query)
+    except Exception:
+        # Something went wrong upon the first attempt - let's give Bright Data SERP API a second chance...
+        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        ctx.reply(f"RETRYING SEARCH: {search_query}")
+        search_results = await fetch_google_search(search_query)
 
     ctx.reply(f"SEARCH SUCCESSFUL: {search_query}")
 
