@@ -11,12 +11,12 @@ All the agents are built using the MiniAgents framework.
 Please refer to the README.md of this repository to learn how to run the application.
 """
 
-import asyncio
-import json
 from utils import check_miniagents_version, fetch_google_search, scrape_web_page
 
 check_miniagents_version()
 
+import asyncio
+import json
 from datetime import datetime
 from typing import Union
 
