@@ -1,3 +1,5 @@
+***NOTE: [web_research.py](https://github.com/teremterem/WebResearch/blob/main/web_research.py) contains exhaustive commentary, we advise you to read it if you want to understand the system in detail (and get a good feel of the framework).***
+
 # WebResearch
 
 A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) framework showcasing an AI-powered web research system.
@@ -34,10 +36,6 @@ The system exhibits incredible parallelism with no special code:
 - All without explicit thread or process management
 
 MiniAgents uses the `start_soon` mode by default, allowing each agent to run in the background. The immutable message design ensures this parallelism is safe and efficient.
-
----
-
-***NOTE: [web_research.py](https://github.com/teremterem/WebResearch/blob/main/web_research.py) contains exhaustive commentary, we advise you to read it if you want to understand the system (and the framework) in greater detail.***
 
 ## Installation
 
