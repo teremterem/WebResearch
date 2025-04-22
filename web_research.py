@@ -266,6 +266,8 @@ async def page_scraper_agent(
             # NOTE: We came up with the "not_for_user" attribute name specifically in this app. We could have used any
             # other name, as long as we properly read it back (see the `main` function at the top of this file).
             "not_for_user": True,
+            # TODO explain what's this for (do we really need it, though ?)
+            "role": "user",
         },
     )
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")  # Let's report success
