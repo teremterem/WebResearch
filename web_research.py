@@ -36,40 +36,47 @@ openai_client = AsyncOpenAI()
 
 # Define JSON schemas to replace Pydantic models
 WEB_SEARCHES_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "web_searches": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "rationale": {"type": "string"},
-                    "web_search_query": {"type": "string"}
+    "name": "web_searches_schema",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "web_searches": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"rationale": {"type": "string"}, "web_search_query": {"type": "string"}},
+                    "required": ["rationale", "web_search_query"],
+                    "additionalProperties": False,
                 },
-                "required": ["rationale", "web_search_query"]
             }
-        }
+        },
+        "required": ["web_searches"],
+        "additionalProperties": False,
     },
-    "required": ["web_searches"]
 }
 
 WEB_PAGES_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "web_pages": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "rationale": {"type": "string"},
-                    "url": {"type": "string"}
+    "name": "web_pages_schema",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "web_pages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"rationale": {"type": "string"}, "url": {"type": "string"}},
+                    "required": ["rationale", "url"],
+                    "additionalProperties": False,
                 },
-                "required": ["rationale", "url"]
-            }
-        }
+            },
+        },
+        "required": ["web_pages"],
+        "additionalProperties": False,
     },
-    "required": ["web_pages"]
 }
+
 
 async def main():
     question = input("\nEnter your question: ")
@@ -132,7 +139,7 @@ async def research_agent(ctx: InteractionContext) -> None:
     response = await openai_client.chat.completions.create(
         model=SMARTER_MODEL,
         messages=message_dicts,
-        response_format={"type": "json_schema", "schema": WEB_SEARCHES_SCHEMA, "name": "web_searches_schema", "strict": True},
+        response_format={"type": "json_schema", "json_schema": WEB_SEARCHES_SCHEMA},
     )
 
     # Parse the JSON response
@@ -162,13 +169,13 @@ async def research_agent(ctx: InteractionContext) -> None:
     )
 
     # For each identified search query, trigger a web search
-    for web_search in parsed['web_searches']:
+    for web_search in parsed["web_searches"]:
         # No `await` in front of `trigger` means no blocking. A promise of a message sequence is placed into
         # `search_and_scraping_results` instead.
         search_and_scraping_results = _web_search_agent.trigger(
             ctx.message_promises,
-            search_query=web_search['web_search_query'],
-            rationale=web_search['rationale'],
+            search_query=web_search["web_search_query"],
+            rationale=web_search["rationale"],
         )
         # Unlike regular `reply`, `reply_out_of_order` doesn't enforce the order of the messages, it just delivers them
         # as soon as they are available (useful here, because we want to report the progress of the web search and
@@ -229,7 +236,7 @@ async def web_search_agent(
     response = await openai_client.chat.completions.create(
         model=SMARTER_MODEL,
         messages=message_dicts,
-        response_format={"type": "json_schema", "schema": WEB_PAGES_SCHEMA, "name": "web_pages_schema", "strict": True},
+        response_format={"type": "json_schema", "json_schema": WEB_PAGES_SCHEMA},
     )
 
     # Parse the JSON response
@@ -237,10 +244,10 @@ async def web_search_agent(
 
     # Filter out pages that were already picked for scraping and also limit the number of pages to be scraped
     web_pages_to_scrape = []
-    for web_page in parsed['web_pages']:
-        if web_page['url'] not in already_picked_urls:
+    for web_page in parsed["web_pages"]:
+        if web_page["url"] not in already_picked_urls:
             web_pages_to_scrape.append(web_page)
-            already_picked_urls.add(web_page['url'])
+            already_picked_urls.add(web_page["url"])
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
 
@@ -252,8 +259,8 @@ async def web_search_agent(
         ctx.reply_out_of_order(
             page_scraper_agent.trigger(
                 ctx.message_promises,
-                url=web_page['url'],
-                rationale=web_page['rationale'],
+                url=web_page["url"],
+                rationale=web_page["rationale"],
             )
         )
 
