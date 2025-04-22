@@ -12,6 +12,7 @@ Please refer to the README.md of this repository to learn how to run the applica
 """
 
 import asyncio
+import json
 from utils import check_miniagents_version, fetch_google_search, scrape_web_page
 
 check_miniagents_version()
@@ -23,7 +24,6 @@ from dotenv import load_dotenv
 from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
 from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
-from pydantic import BaseModel
 
 load_dotenv()
 
@@ -34,6 +34,42 @@ SLEEP_BEFORE_RETRY = 3
 
 openai_client = AsyncOpenAI()
 
+# Define JSON schemas to replace Pydantic models
+WEB_SEARCHES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "web_searches": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rationale": {"type": "string"},
+                    "web_search_query": {"type": "string"}
+                },
+                "required": ["rationale", "web_search_query"]
+            }
+        }
+    },
+    "required": ["web_searches"]
+}
+
+WEB_PAGES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "web_pages": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rationale": {"type": "string"},
+                    "url": {"type": "string"}
+                },
+                "required": ["rationale", "url"]
+            }
+        }
+    },
+    "required": ["web_pages"]
+}
 
 async def main():
     question = input("\nEnter your question: ")
@@ -92,16 +128,17 @@ async def research_agent(ctx: InteractionContext) -> None:
             "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
-    # There is no built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
-    # library directly
-    response = await openai_client.beta.chat.completions.parse(
+    # Use openai_client with a JSON schema instead of a Pydantic model
+    response = await openai_client.chat.completions.create(
         model=SMARTER_MODEL,
         messages=message_dicts,
-        response_format=WebSearchesToBeDone,  # See the definition of this class at the bottom of this file
+        response_format={"type": "json_schema", "schema": WEB_SEARCHES_SCHEMA, "name": "web_searches_schema", "strict": True},
     )
-    parsed: WebSearchesToBeDone = response.choices[0].message.parsed
 
-    ctx.reply(f"RUNNING {len(parsed.web_searches)} WEB SEARCHES")
+    # Parse the JSON response
+    parsed = json.loads(response.choices[0].message.content)
+
+    ctx.reply(f"RUNNING {len(parsed['web_searches'])} WEB SEARCHES")
 
     already_picked_urls = set[str]()
     # Let's fork the `web_search_agent` to introduce mutable state - we want it to remember across multiple calls
@@ -125,13 +162,13 @@ async def research_agent(ctx: InteractionContext) -> None:
     )
 
     # For each identified search query, trigger a web search
-    for web_search in parsed.web_searches:
+    for web_search in parsed['web_searches']:
         # No `await` in front of `trigger` means no blocking. A promise of a message sequence is placed into
         # `search_and_scraping_results` instead.
         search_and_scraping_results = _web_search_agent.trigger(
             ctx.message_promises,
-            search_query=web_search.web_search_query,
-            rationale=web_search.rationale,
+            search_query=web_search['web_search_query'],
+            rationale=web_search['rationale'],
         )
         # Unlike regular `reply`, `reply_out_of_order` doesn't enforce the order of the messages, it just delivers them
         # as soon as they are available (useful here, because we want to report the progress of the web search and
@@ -188,20 +225,22 @@ async def web_search_agent(
             "well. Current date is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
-    # No built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client directly
-    response = await openai_client.beta.chat.completions.parse(
+    # Use openai_client with a JSON schema instead of a Pydantic model
+    response = await openai_client.chat.completions.create(
         model=SMARTER_MODEL,
         messages=message_dicts,
-        response_format=WebPagesToBeRead,  # See the definition of this class at the bottom of this file
+        response_format={"type": "json_schema", "schema": WEB_PAGES_SCHEMA, "name": "web_pages_schema", "strict": True},
     )
-    parsed: WebPagesToBeRead = response.choices[0].message.parsed
+
+    # Parse the JSON response
+    parsed = json.loads(response.choices[0].message.content)
 
     # Filter out pages that were already picked for scraping and also limit the number of pages to be scraped
-    web_pages_to_scrape: list[WebPage] = []
-    for web_page in parsed.web_pages:
-        if web_page.url not in already_picked_urls:
+    web_pages_to_scrape = []
+    for web_page in parsed['web_pages']:
+        if web_page['url'] not in already_picked_urls:
             web_pages_to_scrape.append(web_page)
-            already_picked_urls.add(web_page.url)
+            already_picked_urls.add(web_page['url'])
         if len(web_pages_to_scrape) >= MAX_WEB_PAGES_PER_SEARCH:
             break
 
@@ -213,8 +252,8 @@ async def web_search_agent(
         ctx.reply_out_of_order(
             page_scraper_agent.trigger(
                 ctx.message_promises,
-                url=web_page.url,
-                rationale=web_page.rationale,
+                url=web_page['url'],
+                rationale=web_page['rationale'],
             )
         )
 
@@ -313,24 +352,6 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
             model=MODEL,
         )
     )
-
-
-class WebSearch(BaseModel):
-    rationale: str
-    web_search_query: str
-
-
-class WebSearchesToBeDone(BaseModel):
-    web_searches: tuple[WebSearch, ...]
-
-
-class WebPage(BaseModel):
-    rationale: str
-    url: str
-
-
-class WebPagesToBeRead(BaseModel):
-    web_pages: tuple[WebPage, ...]
 
 
 if __name__ == "__main__":
