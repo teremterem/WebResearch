@@ -1,4 +1,4 @@
-***NOTE: [web_research.py](https://github.com/teremterem/WebResearch/blob/main/web_research.py) contains exhaustive commentary, we advise you to read it if you want to understand the system in detail (and get a good feel of the framework).***
+***NOTE: The [web_research.py](https://github.com/teremterem/WebResearch/blob/main/web_research.py) file contains exhaustive commentary, we advise you to read it if you want to understand the system in detail (and get a good feel of the framework).***
 
 # WebResearch
 
