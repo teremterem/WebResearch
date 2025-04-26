@@ -48,7 +48,7 @@ async def main():
     # all the promises.
     async for message_promise in response_promises:
         # Skip messages that are not intended for the user (you'll see where this attribute is set later)
-        if getattr(message_promise.preliminary_metadata, "not_for_user", False):
+        if getattr(message_promise.known_beforehand, "not_for_user", False):
             continue
         # Iterate over the individual tokens in the message promise (messages that aren't broken down into tokens will
         # be delivered in a single token)
