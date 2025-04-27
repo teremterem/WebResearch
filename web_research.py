@@ -304,7 +304,12 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
                 "USER QUESTION:",
                 user_question,
                 "INFORMATION FOUND ON THE INTERNET:",
-                ctx.message_promises,
+                # The `as_single_text_promise()` method concatenates all the messages in the promised sequence into a
+                # single text message promise with the original messages separated by double newlines. As you can see,
+                # it also returns a promise (and there is no `await` in front of it). The actual concatenation happens
+                # in the background because the messages that are being concatenated might also not be available right
+                # away.
+                ctx.message_promises.as_single_text_promise(),
             ],
             system=(
                 "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
