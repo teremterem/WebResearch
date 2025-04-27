@@ -47,8 +47,8 @@ async def main():
     # switching, so the agent above as well as its "sub-agents" will now start their work in the background to serve
     # all the promises.
     async for message_promise in response_promises:
-        # Skip messages that are not intended for the user (you'll see where this attribute is set later)
-        if getattr(message_promise.known_beforehand, "not_for_user", False):
+        # Skip messages that are not intended for the user (you'll see where the `not_for_user` attribute is set later)
+        if message_promise.known_beforehand.get("not_for_user"):
             continue
         # Iterate over the individual tokens in the message promise (messages that aren't broken down into tokens will
         # be delivered in a single token)
