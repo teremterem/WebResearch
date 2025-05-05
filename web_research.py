@@ -12,25 +12,27 @@ Please refer to the README.md of this repository to learn how to run the applica
 """
 
 import asyncio
-from utils import check_miniagents_version, fetch_google_search, scrape_web_page
-
-check_miniagents_version()
-
 from datetime import datetime
 from typing import Union
 
 from dotenv import load_dotenv
-from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
-from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from utils import check_miniagents_version, fetch_google_search, scrape_web_page
+
+check_miniagents_version()
+
+# pylint: disable=wrong-import-position
+from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
+from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
+
 load_dotenv()
 
-MODEL = "gpt-4o"  # "gpt-4o-mini"
+MODEL = "gpt-4o-mini"  # "gpt-4o"
 SMARTER_MODEL = "o4-mini"  # "o3"
-MAX_WEB_PAGES_PER_SEARCH = 3
-SLEEP_BEFORE_RETRY = 3
+MAX_WEB_PAGES_PER_SEARCH = 2
+SLEEP_BEFORE_RETRY_SEC = 5
 
 openai_client = AsyncOpenAI()
 
@@ -89,7 +91,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         ctx.message_promises,
         system=(
             "Your job is to breakdown the user's question into a list of web searches that need to be done to answer "
-            "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
+            "the question. Please try to optimize your search queries so there aren't too many of them. Current date "
+            "is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
     # There is no built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
@@ -167,9 +170,9 @@ async def web_search_agent(
     try:
         # Execute the search query
         search_results = await fetch_google_search(search_query)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         # Something went wrong upon the first attempt - let's give Bright Data SERP API a second chance...
-        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        await asyncio.sleep(SLEEP_BEFORE_RETRY_SEC)
         ctx.reply(f"RETRYING SEARCH: {search_query}")
         search_results = await fetch_google_search(search_query)
 
@@ -230,9 +233,9 @@ async def page_scraper_agent(
     try:
         # Scrape the web page
         page_content = await scrape_web_page(url)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         # Something went wrong upon the first attempt - let's give Bright Data Scraping Browser a second chance...
-        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        await asyncio.sleep(SLEEP_BEFORE_RETRY_SEC)
         ctx.reply(f"RETRYING: {url}")
         page_content = await scrape_web_page(url)
 
