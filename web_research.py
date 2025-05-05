@@ -12,25 +12,27 @@ Please refer to the README.md of this repository to learn how to run the applica
 """
 
 import asyncio
-from utils import check_miniagents_version, fetch_google_search, scrape_web_page
-
-check_miniagents_version()
-
 from datetime import datetime
 from typing import Union
 
 from dotenv import load_dotenv
-from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
-from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from utils import check_miniagents_version, fetch_google_search, scrape_web_page
+
+check_miniagents_version()
+
+# pylint: disable=wrong-import-position
+from miniagents import AgentCall, InteractionContext, Message, MessageSequencePromise, MiniAgents, miniagent
+from miniagents.ext.llms import OpenAIAgent, aprepare_dicts_for_openai
+
 load_dotenv()
 
-MODEL = "gpt-4o"  # "gpt-4o-mini"
+MODEL = "gpt-4o-mini"  # "gpt-4o"
 SMARTER_MODEL = "o4-mini"  # "o3"
-MAX_WEB_PAGES_PER_SEARCH = 3
-SLEEP_BEFORE_RETRY = 3
+MAX_WEB_PAGES_PER_SEARCH = 2
+SLEEP_BEFORE_RETRY_SEC = 5
 
 openai_client = AsyncOpenAI()
 
@@ -47,8 +49,8 @@ async def main():
     # switching, so the agent above as well as its "sub-agents" will now start their work in the background to serve
     # all the promises.
     async for message_promise in response_promises:
-        # Skip messages that are not intended for the user (you'll see where this attribute is set later)
-        if getattr(message_promise.preliminary_metadata, "not_for_user", False):
+        # Skip messages that are not intended for the user (you'll see where the `not_for_user` attribute is set later)
+        if message_promise.known_beforehand.get("not_for_user"):
             continue
         # Iterate over the individual tokens in the message promise (messages that aren't broken down into tokens will
         # be delivered in a single token)
@@ -89,7 +91,8 @@ async def research_agent(ctx: InteractionContext) -> None:
         ctx.message_promises,
         system=(
             "Your job is to breakdown the user's question into a list of web searches that need to be done to answer "
-            "the question. Current date is " + datetime.now().strftime("%Y-%m-%d")
+            "the question. Please try to optimize your search queries so there aren't too many of them. Current date "
+            "is " + datetime.now().strftime("%Y-%m-%d")
         ),
     )
     # There is no built-in miniagent for OpenAI's Structured Output feature (yet), so we will use OpenAI's client
@@ -167,9 +170,9 @@ async def web_search_agent(
     try:
         # Execute the search query
         search_results = await fetch_google_search(search_query)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         # Something went wrong upon the first attempt - let's give Bright Data SERP API a second chance...
-        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        await asyncio.sleep(SLEEP_BEFORE_RETRY_SEC)
         ctx.reply(f"RETRYING SEARCH: {search_query}")
         search_results = await fetch_google_search(search_query)
 
@@ -230,9 +233,9 @@ async def page_scraper_agent(
     try:
         # Scrape the web page
         page_content = await scrape_web_page(url)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         # Something went wrong upon the first attempt - let's give Bright Data Scraping Browser a second chance...
-        await asyncio.sleep(SLEEP_BEFORE_RETRY)
+        await asyncio.sleep(SLEEP_BEFORE_RETRY_SEC)
         ctx.reply(f"RETRYING: {url}")
         page_content = await scrape_web_page(url)
 
@@ -266,6 +269,8 @@ async def page_scraper_agent(
             # NOTE: We came up with the "not_for_user" attribute name specifically in this app. We could have used any
             # other name, as long as we properly read it back (see the `main` function at the top of this file).
             "not_for_user": True,
+            # TODO explain what's this for (do we really need it, though ?)
+            "role": "user",
         },
     )
     ctx.reply(f"SCRAPING SUCCESSFUL: {url}")  # Let's report success
@@ -302,7 +307,12 @@ async def final_answer_agent(ctx: InteractionContext, user_question: Union[Messa
                 "USER QUESTION:",
                 user_question,
                 "INFORMATION FOUND ON THE INTERNET:",
-                ctx.message_promises,
+                # The `as_single_text_promise()` method concatenates all the messages in the promised sequence into a
+                # single text message promise with the original messages separated by double newlines. As you can see,
+                # it also returns a promise (and there is no `await` in front of it). The actual concatenation happens
+                # in the background because the messages that are being concatenated might also not be available right
+                # away.
+                ctx.message_promises.as_single_text_promise(),
             ],
             system=(
                 "Please answer the USER QUESTION based on the INFORMATION FOUND ON THE INTERNET. "
@@ -335,6 +345,7 @@ if __name__ == "__main__":
     MiniAgents(
         # # Make OpenAIAgent (as well as any other LLM miniagent) log LLM requests and responses as markdown files in
         # # the `llm_logs` folder under the current working directory (helps understand what happens under the hood).
+        # # Check the `llm_logs` folder after you run this app to see what those files looks like.
         llm_logger_agent=True,
         # # Let's make the system as robust as possible by not failing any of the agents upon errors (circle those
         # # errors around as part of agent communications instead - the language model will know to ignore them and

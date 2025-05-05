@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import miniagents
+
+# pylint: disable=wrong-import-order
 from dotenv import load_dotenv
 from markdownify import markdownify as md
 from selenium.webdriver import Remote, ChromeOptions
@@ -13,6 +15,8 @@ from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnecti
 from selenium.webdriver.remote.client_config import ClientConfig
 
 load_dotenv()
+
+EXPECTED_MINIAGENTS_VERSION = (0, 0, 30)
 
 BRIGHTDATA_SERP_API_CREDS = os.environ["BRIGHTDATA_SERP_API_CREDS"]
 BRIGHTDATA_SCRAPING_BROWSER_CREDS = os.environ["BRIGHTDATA_SCRAPING_BROWSER_CREDS"]
@@ -22,7 +26,7 @@ BRIGHT_DATA_TIMEOUT = 20
 # Allow only a limited number of concurrent web searches
 searching_semaphore = asyncio.Semaphore(5)
 # Allow only a limited number of concurrent web page scrapings
-scraping_thread_pool = ThreadPoolExecutor(max_workers=5)
+scraping_thread_pool = ThreadPoolExecutor(max_workers=4)
 
 
 async def fetch_google_search(query: str) -> dict[str, Any]:
@@ -64,9 +68,9 @@ async def scrape_web_page(url: str) -> str:
 def check_miniagents_version():
     try:
         miniagents_version: tuple[int, int, int] = tuple(map(int, miniagents.__version__.split(".")))
-        valid_miniagents_version = miniagents_version >= (0, 0, 29)
+        valid_miniagents_version = miniagents_version >= EXPECTED_MINIAGENTS_VERSION
     except ValueError:
-        # if any of the version components are not integers, we will consider it as a later version
+        # if any of the version components are not integers, we will consider it as an older version
         # (before 0.0.28 there were only numeric versions)
         valid_miniagents_version = True
     except AttributeError:
@@ -76,7 +80,8 @@ def check_miniagents_version():
     if not valid_miniagents_version:
         print(
             "\n"
-            "You need MiniAgents v0.0.29 or later to run this example.\n"
+            f"You need MiniAgents v{'.'.join([str(v) for v in EXPECTED_MINIAGENTS_VERSION])} or later to run this "
+            "example.\n"
             "\n"
             "Please update MiniAgents with `pip install -U miniagents`\n"
         )
