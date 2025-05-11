@@ -1,4 +1,4 @@
-## ⚠️ ATTENTION: THIS PROJECT WAS MOVED [HERE](https://github.com/teremterem/MiniAgents/tree/main/examples/web_research_tutorial)! ⚠️
+# ⚠️ ATTENTION: THIS PROJECT WAS MOVED [HERE](https://github.com/teremterem/MiniAgents/tree/main/examples/web_research_tutorial)! ⚠️
 
 ***NOTE: For a detailed walkthrough of this project, check out the [full tutorial](https://app.readytensor.ai/publications/miniagents-multi-agent-ai-with-procedural-simplicity-sZ9xgmyLOTyp).***
 
