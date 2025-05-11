@@ -1,4 +1,4 @@
-***NOTE: The [web_research.py](https://github.com/teremterem/WebResearch/blob/main/web_research.py) file contains exhaustive commentary, we advise you to read it if you want to understand the system in detail (and get a good feel of the framework).***
+***NOTE: For a detailed walkthrough of this project, check out the [full tutorial](https://app.readytensor.ai/publications/miniagents-multi-agent-ai-with-procedural-simplicity-sZ9xgmyLOTyp).***
 
 # WebResearch
 
@@ -6,7 +6,12 @@ A demonstration of the [MiniAgents](https://github.com/teremterem/MiniAgents) fr
 
 ## Overview
 
-![WebResearch in action](https://github.com/teremterem/MiniAgents/raw/main/images/web_research.py-x3plus.gif)
+<p>
+    <a href="https://app.readytensor.ai/publications/miniagents-multi-agent-ai-with-procedural-simplicity-sZ9xgmyLOTyp">
+        <img alt="WebResearch in action"
+            src="https://github.com/teremterem/MiniAgents/raw/main/images/web_research.py-x3plus.gif">
+    </a>
+</p>
 
 WebResearch is a multi-agent system that:
 
